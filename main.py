@@ -1,10 +1,23 @@
 import flet as ft
 import logging
 import utils
+from logger import SnackBarHandler
 
 # --- LOGGER SETUP ------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("flet_app")
+_snack_handler = SnackBarHandler()
+_snack_handler.setLevel(logging.INFO)
+logger.addHandler(_snack_handler)
+# File logging: write messages to mdi.log in the repo root
+_file_handler = logging.FileHandler("mdi.log")
+_file_handler.setLevel(logging.INFO)
+_file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_file_handler.setFormatter(_file_formatter)
+logger.addHandler(_file_handler)
+
+# Write an initial log entry
+logger.info("Logger initialized - writing to mdi.log and SnackBarHandler attached")
 
 # --- UNIVERSAL FUNCTIONS ------------------------------------------------------
 def show_snack(page, message, color="green"):
@@ -77,9 +90,25 @@ def home_view(page):
 
 def about_view(page):
     logger.info("Loaded About page")
+    # Demo buttons to exercise the SnackBar logger at different levels
+    def _log_info(e):
+        logger.info("Demo INFO from About page")
+
+    def _log_warn(e):
+        logger.warning("Demo WARNING from About page")
+
+    def _log_error(e):
+        logger.error("Demo ERROR from About page")
+
     return ft.Column([
         ft.Text("About this app."),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "About SnackBar!"))
+        ft.Row([
+            ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "About SnackBar!")),
+            ft.VerticalDivider(opacity=0),
+            ft.ElevatedButton("Log INFO", on_click=_log_info),
+            ft.ElevatedButton("Log WARNING", on_click=_log_warn),
+            ft.ElevatedButton("Log ERROR", on_click=_log_error),
+        ], alignment=ft.MainAxisAlignment.CENTER)
     ], alignment="center")
 
 def exit_view(page):
@@ -171,6 +200,16 @@ def route_change(e):
 
 def main(page: ft.Page):
     page.title = "Manage Digital Ingest: a Flet Multi-Page App"
+
+    # Initialize a default SnackBar so the SnackBarHandler has a target
+    page.snack_bar = ft.SnackBar(content=ft.Text(""))
+
+    # Store the logger in the page session for other modules to use
+    page.session.set("logger", logger)
+
+    # Also give the snack handler the page reference
+    _snack_handler.set_page(page)
+
     page.on_route_change = route_change
     page.go(page.route or "/") # Load initial route
 
