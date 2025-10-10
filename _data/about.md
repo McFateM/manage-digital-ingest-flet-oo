@@ -1,6 +1,5 @@
 **This app will NOT `perform` any ingest or import, but it should be used to prep digital assets and metadata (filenames, etc.) for subsequent operations.**
 
-  
 ## Features of this app include:  
   
   - a processing mode selector: `Alma` or `CollectionBuilder`,  
@@ -13,3 +12,8 @@
   - an optional derivative (thumbnails, small images, etc.) creation utility, and
   - automatic naming and transport of files to Azure storage.
 
+> Testing: This is a 'block quote'.
+
+```
+Testing: This is a 'code block'.
+```

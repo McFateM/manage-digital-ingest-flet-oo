@@ -64,10 +64,10 @@ def home_view(page):
                 height = 10,
             ),
             ft.Image(
-                src = 'logo.png',
+                src = 'logo_for_subsplus.png',  # Updated to Grinnell College Libraries logo
                 fit = ft.ImageFit.CONTAIN,
-                width = 100,
-                height = 100
+                width = 400,
+                # height = 300
             ),
             ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍",color = ft.Colors.GREY_600),
             ft.Text("Manage Digital Ingest: a Flet Multi-Page App", size=35),
@@ -100,10 +100,67 @@ def about_view(page):
     def _log_error(e):
         logger.error("Demo ERROR from About page")
 
+    # Read markdown content from a file
+    with open("_data/about.md", "r", encoding="utf-8") as file:
+        markdown_text = file.read( )
+
+    # Create a Markdown widget with the content
+    md_widget = ft.Markdown(markdown_text, 
+        md_style_sheet=ft.MarkdownStyleSheet(
+            blockquote_text_style=ft.TextStyle(bgcolor=ft.Colors.PURPLE_50, color=ft.Colors.BLACK, size=16, weight=ft.FontWeight.BOLD),
+            p_text_style=ft.TextStyle(color=ft.Colors.BLACK, size=16, weight=ft.FontWeight.NORMAL),
+            code_text_style=ft.TextStyle(color=ft.Colors.ORANGE_400, size=16, weight=ft.FontWeight.BOLD),
+        )
+    )  
+
+    # Read config from _data/config.json
+    config = utils.read_config( )
+
+    x = ft.Column(
+        scroll = ft.ScrollMode.AUTO,
+        spacing = 5,
+        expand = True,
+        alignment = ft.MainAxisAlignment.CENTER,
+        horizontal_alignment = ft.CrossAxisAlignment.CENTER,
+        controls = [
+            ft.Container(
+                height = 10,
+            ),
+            ft.Image(
+                src = 'logo_for_subsplus.png',  # Updated to Grinnell College Libraries logo
+                fit = ft.ImageFit.CONTAIN,
+                width = 500,
+                # height = 300
+            ),
+            ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍",color = ft.Colors.GREY_600),
+            ft.Text("Manage Digital Ingest: a Flet Multi-Page App", size=35),
+            ft.Markdown("A Flet Python app for managing Grinnell College ingest of digital objects to Alma or CollectionBuilder"),
+            ft.Divider(height=20, color=ft.Colors.RED_400),
+            md_widget,
+            # ft.FilledButton("Go to Counter", on_click=data.go("/counter/test/0")),
+            ft.Divider(height=20, color=ft.Colors.RED_400),
+            ft.Row([
+                ft.ElevatedButton("Log INFO", on_click=_log_info),
+                ft.ElevatedButton("Log WARNING", on_click=_log_warn),
+                ft.ElevatedButton("Log ERROR", on_click=_log_error),
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.Divider(height=20, color=ft.Colors.RED_400),
+            ft.Container(
+                height = 80,
+                content = ft.Markdown("**Thanks for choosing Flet!**"),
+            ),
+        ],
+    )
+
+    # page.session.set("last_status", "At Home page")
+
+    return x
+
+
     return ft.Column([
         ft.Text("About this app."),
         ft.Row([
-            ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "About SnackBar!")),
+            # ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "About SnackBar!")),
             ft.VerticalDivider(opacity=0),
             ft.ElevatedButton("Log INFO", on_click=_log_info),
             ft.ElevatedButton("Log WARNING", on_click=_log_warn),
