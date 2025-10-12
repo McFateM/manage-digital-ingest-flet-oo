@@ -148,10 +148,8 @@ def about_view(page):
         logger.error("Demo ERROR from About page")
 
     # Generate session report
-    session_report = "# Page Session Report\n\n"
-    
     session_data_found = False
-    session_report += "## Current Session Data:\n\n"
+    session_report = "## Current Session Data:\n\n"
 
     # Get all session keys and values
     for key in page.session.get_keys( ):
@@ -162,7 +160,7 @@ def about_view(page):
         session_report += "No session data found!\n\n"
     
     session_report += "---\n\n"
-    session_report += "*This report shows all key-value pairs stored in the page session.*"
+    session_report += "*This report shows all key-value pairs stored in `page.session`.*"
 
     # Create a Markdown widget with the session report
     md_widget = ft.Markdown(session_report, 
