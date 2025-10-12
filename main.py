@@ -147,12 +147,25 @@ def about_view(page):
     def _log_error(e):
         logger.error("Demo ERROR from About page")
 
-    # Read markdown content from a file
-    with open("_data/about.md", "r", encoding="utf-8") as file:
-        markdown_text = file.read( )
+    # Generate session report
+    session_report = "# Page Session Report\n\n"
+    
+    session_data_found = False
+    session_report += "## Current Session Data:\n\n"
 
-    # Create a Markdown widget with the content
-    md_widget = ft.Markdown(markdown_text, 
+    # Get all session keys and values
+    for key in page.session.get_keys( ):
+        session_report += f"**{key}**: `{page.session.get(key)}`\n\n"
+        session_data_found = True
+    
+    if not session_data_found:
+        session_report += "No session data found!\n\n"
+    
+    session_report += "---\n\n"
+    session_report += "*This report shows all key-value pairs stored in the page session.*"
+
+    # Create a Markdown widget with the session report
+    md_widget = ft.Markdown(session_report, 
         md_style_sheet=ft.MarkdownStyleSheet(
             blockquote_text_style=ft.TextStyle(bgcolor=colors['markdown_bg'], color=colors['markdown_text'], size=16, weight=ft.FontWeight.BOLD),
             p_text_style=ft.TextStyle(color=colors['primary_text'], size=16, weight=ft.FontWeight.NORMAL),
