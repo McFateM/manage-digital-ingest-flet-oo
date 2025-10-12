@@ -6,19 +6,45 @@ import os
 import shutil
 import tempfile
 from subprocess import call
-from thumbnail import generate_thumbnail
 from logger import SnackBarHandler
+from thumbnail import generate_thumbnail
+
+# Simple thumbnail generation function to replace missing thumbnail module
+def generate_pdf_thumbnail(input_path, output_path, options):
+    """
+    Generate a thumbnail using ImageMagick convert command
+    """
+    try:
+        width = options.get('width', 400)
+        height = options.get('height', 400)
+        quality = options.get('quality', 85)
+        
+        # Create the command
+        cmd = f'magick convert "{input_path}" -resize {width}x{height} -quality {quality} "{output_path}"'
+        
+        # Execute the command
+        return_code = call(cmd, shell=True)
+        
+        if return_code == 0:
+            return True
+        else:
+            logging.error(f"Failed to generate thumbnail with command: {cmd}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Exception in generate_pdf_thumbnail: {str(e)}")
+        return False
 
 # --- LOGGER SETUP ------------------------------------------------------------
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("flet_app")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 _snack_handler = SnackBarHandler()
 _snack_handler.setLevel(logging.INFO)
 logger.addHandler(_snack_handler)
 # File logging: write messages to mdi.log in the repo root
 _file_handler = logging.FileHandler("mdi.log")
 _file_handler.setLevel(logging.INFO)
-_file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+_file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 _file_handler.setFormatter(_file_formatter)
 logger.addHandler(_file_handler)
 
@@ -606,7 +632,9 @@ def file_selector_view(page):
         file_list_controls = []
         if selected_files:
             # Get temp file info for display
-            temp_file_info = page.session.get("temp_file_info", [])
+            temp_file_info = page.session.get("temp_file_info")
+            if temp_file_info is None:
+                temp_file_info = []
             
             file_list_controls.append(
                 ft.Text(f"Selected {len(selected_files)} files:", 
@@ -761,9 +789,13 @@ def derivatives_view(page):
                 dirname, basename = os.path.split(file_path)
                 root, ext = os.path.splitext(basename)
                 
+                logger.info(f"Processing file: {file_path}")
+                logger.info(f"Directory: {dirname}, Basename: {basename}, Root: {root}, Extension: {ext}")
+                
                 if mode == 'Alma':
-                    # Alma mode - create thumbnail only
-                    derivative_path = os.path.join(dirname, f"{root}_thumbnail.jpg")
+                    # Alma mode - create thumbnail only with _TN.jpg extension
+                    derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                    logger.info(f"Alma derivative path: {derivative_path}")
                     
                     # Define options for Alma thumbnails
                     options = {
@@ -776,9 +808,14 @@ def derivatives_view(page):
                     
                     # Process based on file type
                     if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png']:
-                        generate_thumbnail(file_path, derivative_path, options)
-                        logger.info(f"Created Alma thumbnail: {derivative_path}")
-                        return True, derivative_path
+                        success = generate_thumbnail(file_path, derivative_path, options)
+                        if success:
+                            logger.info(f"Created Alma thumbnail: {derivative_path}")
+                            return True, derivative_path
+                        else:
+                            error_msg = f"Failed to create Alma thumbnail: {derivative_path}"
+                            logger.error(error_msg)
+                            return False, error_msg
                     elif ext.lower() == '.pdf':
                         cmd = f'magick convert "{file_path}[0]" "{derivative_path}"'
                         return_code = call(cmd, shell=True)
@@ -798,6 +835,7 @@ def derivatives_view(page):
                     # CollectionBuilder mode - create thumbnail or small
                     if derivative_type == 'thumbnail':
                         derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                        logger.info(f"CollectionBuilder thumbnail path: {derivative_path}")
                         options = {
                             'trim': False,
                             'height': 400,
@@ -807,6 +845,7 @@ def derivatives_view(page):
                         }
                     elif derivative_type == 'small':
                         derivative_path = os.path.join(dirname, f"{root}_SMALL.jpg")
+                        logger.info(f"CollectionBuilder small path: {derivative_path}")
                         options = {
                             'trim': False,
                             'height': 800,
@@ -821,9 +860,14 @@ def derivatives_view(page):
                     
                     # Process based on file type
                     if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png']:
-                        generate_thumbnail(file_path, derivative_path, options)
-                        logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
-                        return True, derivative_path
+                        success = generate_thumbnail(file_path, derivative_path, options)
+                        if success:
+                            logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
+                            return True, derivative_path
+                        else:
+                            error_msg = f"Failed to create CollectionBuilder {derivative_type}: {derivative_path}"
+                            logger.error(error_msg)
+                            return False, error_msg
                     elif ext.lower() == '.pdf':
                         cmd = f'magick convert "{file_path}[0]" "{derivative_path}"'
                         return_code = call(cmd, shell=True)
@@ -949,6 +993,44 @@ def derivatives_view(page):
         
         # Final status update
         progress_bar.value = 1.0
+        
+        # For Alma mode, rename all _TN.jpg files to .jpg.clientThumb after processing
+        if current_mode == "Alma" and success_count > 0:
+            status_text.value = f"🔄 Renaming Alma thumbnails to .jpg.clientThumb format..."
+            page.update()
+            
+            # Get the temporary directory where files are stored
+            temp_dir = page.session.get("temp_directory")
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    # Find all _TN.jpg files in the temp directory
+                    tn_files = []
+                    for filename in os.listdir(temp_dir):
+                        if filename.endswith("_TN.jpg"):
+                            tn_files.append(filename)
+                    
+                    renamed_count = 0
+                    for tn_filename in tn_files:
+                        try:
+                            # Create old and new paths
+                            old_path = os.path.join(temp_dir, tn_filename)
+                            # Replace _TN.jpg with .jpg.clientThumb
+                            new_filename = tn_filename.replace("_TN.jpg", ".jpg.clientThumb")
+                            new_path = os.path.join(temp_dir, new_filename)
+                            
+                            # Rename the file
+                            os.rename(old_path, new_path)
+                            renamed_count += 1
+                            logger.info(f"Renamed {tn_filename} to {new_filename}")
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to rename {tn_filename}: {str(e)}")
+                    
+                    logger.info(f"Alma mode: Renamed {renamed_count} thumbnail files to .jpg.clientThumb format")
+                    
+                except Exception as e:
+                    logger.error(f"Error during Alma thumbnail renaming: {str(e)}")
+        
         status_text.value = f"✅ Completed! Processed: {processed_count}, Success: {success_count}, Errors: {error_count}"
         logger.info(f"Derivative creation completed. Processed: {processed_count}, Success: {success_count}, Errors: {error_count}")
         page.update()
@@ -987,9 +1069,9 @@ def derivatives_view(page):
     
     status_info_controls.extend([
         ft.Text("Derivative Types:", size=14, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-        ft.Text("• CollectionBuilder: thumbnail + small derivatives", 
+        ft.Text("• CollectionBuilder: _TN.jpg + _SMALL.jpg derivatives", 
                size=12, color=colors['container_text']),
-        ft.Text("• Alma: thumbnail derivative only", 
+        ft.Text("• Alma: .jpg.clientThumb derivative (renamed after creation)", 
                size=12, color=colors['container_text'])
     ])
     
