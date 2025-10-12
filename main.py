@@ -212,7 +212,7 @@ def settings_view(page):
         cb_collection_options = json.load(file)
     
     # File selector options (hardcoded as requested)
-    file_selector_options = ["FilePicker", "Google Sheet"]
+    file_selector_options = ["FilePicker", "Google Sheet", "CSV"]
     
     # Log all available options
     logger.info(f"Available mode options: {mode_options}")
@@ -406,9 +406,145 @@ def settings_view(page):
 
 def file_selector_view(page):
     logger.info("File Selector page")
-    return ft.Column([
-        ft.Text("File Selector Page")
-    ], alignment="center")
+    
+    # Get the current file selector option from session
+    current_file_option = page.session.get("selected_file_option")
+    
+    # Get theme-appropriate colors
+    colors = get_theme_colors(page)
+    
+    # Default content if no option is selected
+    if not current_file_option:
+        return ft.Column([
+            ft.Text("File Selector Page", size=24, weight=ft.FontWeight.BOLD),
+            ft.Container(height=20),
+            ft.Text("Please select a file option in Settings first.", 
+                   size=16, color=colors['secondary_text']),
+            ft.ElevatedButton("Go to Settings", 
+                            on_click=lambda e: page.go("/settings"))
+        ], alignment="center")
+    
+    # Different execution paths based on selected option
+    if current_file_option == "FilePicker":
+        logger.info("Executing FilePicker path")
+        
+        # Get selected files from session
+        selected_files = page.session.get("selected_files", [])
+        
+        # FilePicker configuration for images and PDFs
+        def on_file_picker_result(e: ft.FilePickerResultEvent):
+            if e.files:
+                # Store file paths in session
+                file_paths = [file.path for file in e.files if file.path]
+                page.session.set("selected_files", file_paths)
+                logger.info(f"Selected {len(file_paths)} files: {file_paths}")
+                # Refresh the page to show selected files
+                page.go("/file_selector")
+            else:
+                logger.info("No files selected")
+        
+        # Create FilePicker with image and PDF filters
+        file_picker = ft.FilePicker(
+            on_result=on_file_picker_result
+        )
+        page.overlay.append(file_picker)
+        
+        def open_file_picker(e):
+            file_picker.pick_files(
+                dialog_title="Select Image and/or PDF Files",
+                allow_multiple=True,
+                allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"]
+            )
+        
+        # Build the file list display
+        file_list_controls = []
+        if selected_files:
+            file_list_controls.append(
+                ft.Text(f"Selected {len(selected_files)} files:", 
+                       size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+            )
+            for i, file_path in enumerate(selected_files, 1):
+                file_name = file_path.split('/')[-1] if '/' in file_path else file_path.split('\\')[-1]
+                file_list_controls.append(
+                    ft.Text(f"{i}. {file_name}", 
+                           size=14, color=colors['secondary_text'])
+                )
+            file_list_controls.append(ft.Container(height=10))
+            file_list_controls.append(
+                ft.ElevatedButton("Clear Selection", 
+                                on_click=lambda e: [
+                                    page.session.set("selected_files", []),
+                                    page.go("/file_selector")
+                                ])
+            )
+        else:
+            file_list_controls.append(
+                ft.Text("No files selected yet...", 
+                       size=14, color=colors['secondary_text'])
+            )
+        
+        return ft.Column([
+            ft.Text("File Selector - FilePicker", size=24, weight=ft.FontWeight.BOLD),
+            ft.Container(height=20),
+            ft.Text("Select image and PDF files from your local file system", 
+                   size=16, color=colors['primary_text']),
+            ft.Container(height=10),
+            ft.ElevatedButton("Open File Picker", 
+                            on_click=open_file_picker),
+            ft.Container(height=20),
+            *file_list_controls
+        ], alignment="center")
+    
+    elif current_file_option == "Google Sheet":
+        logger.info("Executing Google Sheet path")
+        return ft.Column([
+            ft.Text("File Selector - Google Sheet", size=24, weight=ft.FontWeight.BOLD),
+            ft.Container(height=20),
+            ft.Text("Import file list from a Google Sheet", 
+                   size=16, color=colors['primary_text']),
+            ft.Container(height=10),
+            ft.TextField(
+                label="Google Sheet URL",
+                hint_text="https://docs.google.com/spreadsheets/d/...",
+                width=400
+            ),
+            ft.Container(height=10),
+            ft.ElevatedButton("Connect to Google Sheet", 
+                            on_click=lambda e: logger.info("Google Sheet connection button clicked")),
+            ft.Container(height=20),
+            ft.Text("Sheet data will be displayed here...", 
+                   size=14, color=colors['secondary_text'])
+        ], alignment="center")
+    
+    elif current_file_option == "CSV":
+        logger.info("Executing CSV path")
+        return ft.Column([
+            ft.Text("File Selector - CSV", size=24, weight=ft.FontWeight.BOLD),
+            ft.Container(height=20),
+            ft.Text("Upload and process a CSV file", 
+                   size=16, color=colors['primary_text']),
+            ft.Container(height=10),
+            ft.ElevatedButton("Upload CSV File", 
+                            on_click=lambda e: logger.info("CSV upload button clicked")),
+            ft.Container(height=10),
+            ft.Text("Supported columns: filename, path, metadata...", 
+                   size=14, color=colors['secondary_text']),
+            ft.Container(height=20),
+            ft.Text("CSV content will be parsed and displayed here...", 
+                   size=14, color=colors['secondary_text'])
+        ], alignment="center")
+    
+    else:
+        # Fallback for unknown options
+        logger.warning(f"Unknown file selector option: {current_file_option}")
+        return ft.Column([
+            ft.Text("File Selector Page", size=24, weight=ft.FontWeight.BOLD),
+            ft.Container(height=20),
+            ft.Text(f"Unknown option: {current_file_option}", 
+                   size=16, color=colors['secondary_text']),
+            ft.ElevatedButton("Go to Settings", 
+                            on_click=lambda e: page.go("/settings"))
+        ], alignment="center")
 
 def derivatives_view(page):
     logger.info("Derivatives Creation page")
@@ -450,8 +586,15 @@ def route_change(e):
     page = e.page
     route = e.route
     page.appbar = build_appbar(page)
-    page.controls.clear( )
+    page.controls.clear()
     logger.info(f"Route changed to: {route}")
+    
+    # Get theme-appropriate colors for the divider
+    colors = get_theme_colors(page)
+    
+    # Add consistent divider below appbar
+    page.add(ft.Divider(height=2, color=colors['divider']))
+    
     view_func = VIEWS.get(route, home_view)
     page.add(view_func(page))
 
