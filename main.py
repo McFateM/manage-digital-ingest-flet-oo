@@ -187,18 +187,6 @@ def about_view(page):
 
     return x
 
-
-    # return ft.Column([
-    #     ft.Text("About this app."),
-    #     ft.Row([
-    #         # ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "About SnackBar!")),
-    #         ft.VerticalDivider(opacity=0),
-    #         ft.ElevatedButton("Log INFO", on_click=_log_info),
-    #         ft.ElevatedButton("Log WARNING", on_click=_log_warn),
-    #         ft.ElevatedButton("Log ERROR", on_click=_log_error),
-    #     ], alignment=ft.MainAxisAlignment.CENTER)
-    # ], alignment="center")
-
 def exit_view(page):
     logger.info("Loaded Exit page")
     return ft.Column([
@@ -304,7 +292,7 @@ def settings_view(page):
         current_theme = "Dark"
     
     # Theme selector container
-    theme_container = ft.Container(
+    theme_settings_container = ft.Container(
         content=ft.Row([
             ft.Icon(
                 name=ft.Icons.PALETTE_OUTLINED,
@@ -331,7 +319,7 @@ def settings_view(page):
     )
     
     # Create containers with dropdowns
-    mode_container = ft.Container(
+    mode_settings_container = ft.Container(
         content=ft.Column([
             ft.Text("Mode Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
             ft.Dropdown(
@@ -349,7 +337,7 @@ def settings_view(page):
         bgcolor=colors['container_bg']
     )
     
-    file_selector_container = ft.Container(
+    file_selector_settings_container = ft.Container(
         content=ft.Column([
             ft.Text("File Selector Options", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
             ft.Dropdown(
@@ -367,7 +355,7 @@ def settings_view(page):
         bgcolor=colors['container_bg']
     )
     
-    storage_container = ft.Container(
+    storage_settings_container = ft.Container(
         content=ft.Column([
             ft.Text("Object Storage Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
             ft.Dropdown(
@@ -385,7 +373,7 @@ def settings_view(page):
         bgcolor=colors['container_bg']
     )
     
-    collection_container = ft.Container(
+    collection_settings_container = ft.Container(
         content=ft.Column([
             ft.Text("CB Collection Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
             ft.Dropdown(
@@ -408,40 +396,28 @@ def settings_view(page):
     return ft.Column([
         ft.Text("Settings Page", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(height=20, color=colors['divider']),
-        theme_container,
-        mode_container,
-        file_selector_container,
-        storage_container,
-        collection_container,
+        theme_settings_container,
+        mode_settings_container,
+        file_selector_settings_container,
+        storage_settings_container,
+        collection_settings_container,
         ft.Divider(height=20, color=colors['divider'])
     ], alignment="center", scroll=ft.ScrollMode.AUTO, expand=True)
 
-def picker_view(page):
-    logger.info("Loaded Picker page")
+def file_selector_view(page):
+    logger.info("File Selector page")
     return ft.Column([
-        ft.Text("Picker Page")
-    ], alignment="center")
-
-def sheet_view(page):
-    logger.info("Loaded Sheet page")
-    return ft.Column([
-        ft.Text("Sheet Page")
-    ], alignment="center")
-
-def fuzzy_search_view(page):
-    logger.info("Loaded Fuzzy Search page")
-    return ft.Column([
-        ft.Text("Fuzzy Search Page")
+        ft.Text("File Selector Page")
     ], alignment="center")
 
 def derivatives_view(page):
-    logger.info("Loaded Derivatives page")
+    logger.info("Derivatives Creation page")
     return ft.Column([
         ft.Text("Derivatives Page")
     ], alignment="center")
 
 def storage_view(page):
-    logger.info("Loaded Storage page")
+    logger.info("Azure Storage page")
     return ft.Column([
         ft.Text("Storage Page")
     ], alignment="center")
@@ -451,9 +427,7 @@ VIEWS = {
     "/about": about_view,
     "/exit": exit_view,
     "/settings": settings_view,
-    "/picker": picker_view,
-    "/sheet": sheet_view,
-    "/fuzzy_search": fuzzy_search_view,
+    "/file_selector": file_selector_view,
     "/derivatives": derivatives_view,
     "/storage": storage_view,
 }
@@ -465,9 +439,7 @@ def build_appbar(page):
             ft.IconButton(ft.Icons.HOME, tooltip="Home", on_click=lambda e: page.go("/")),
             ft.IconButton(ft.Icons.INFO, tooltip="About", on_click=lambda e: page.go("/about")),
             ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=lambda e: page.go("/settings")),
-            ft.IconButton(ft.Icons.FILE_OPEN, tooltip="Select Files for Ingest", on_click=lambda e: page.go("/picker")),
-            ft.IconButton(ft.Icons.GRID_ON_SHARP, tooltip="Show Files from a Google Sheet or CSV", on_click=lambda e: page.go("/sheet")),
-            ft.IconButton(ft.Icons.IMAGE_SEARCH, tooltip="Fuzzy Search for Selected Files", on_click=lambda e: page.go("/fuzzy_search")),
+            ft.IconButton(ft.Icons.FILE_OPEN, tooltip="Select Files for Ingest", on_click=lambda e: page.go("/file_selector")),
             ft.IconButton(ft.Icons.PHOTO_SIZE_SELECT_LARGE_SHARP, tooltip="Create Derivatives from Selected Files", on_click=lambda e: page.go("/derivatives")),
             ft.IconButton(ft.Icons.STORAGE, tooltip="Engage Azure Storage", on_click=lambda e: page.go("/storage")),
             ft.IconButton(ft.Icons.EXIT_TO_APP, tooltip="Exit", on_click=lambda e: page.go("/exit"))
