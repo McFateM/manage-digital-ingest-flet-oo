@@ -160,7 +160,7 @@ def about_view(page):
             ft.Image(
                 src = 'logo_for_subsplus.png',  # Updated to Grinnell College Libraries logo
                 fit = ft.ImageFit.CONTAIN,
-                width = 500,
+                width = 400,
                 # height = 300
             ),
             ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍",color = colors['secondary_text']),
@@ -485,6 +485,10 @@ def route_change(e):
 
 def main(page: ft.Page):
     page.title = "Manage Digital Ingest: a Flet Multi-Page App"
+    
+    # Set window dimensions - increase height by 100 pixels from typical default
+    page.window.height = 700  # Default is typically 600, so adding 100
+    page.window.min_height = 500
     
     # Set default theme mode to Light
     page.theme_mode = ft.ThemeMode.LIGHT
