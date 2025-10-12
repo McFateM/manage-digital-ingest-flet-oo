@@ -2,6 +2,11 @@ import flet as ft
 import logging
 import utils
 import json
+import os
+import shutil
+import tempfile
+from subprocess import call
+from thumbnail import generate_thumbnail
 from logger import SnackBarHandler
 
 # --- LOGGER SETUP ------------------------------------------------------------
@@ -479,13 +484,100 @@ def file_selector_view(page):
         if selected_files is None:
             selected_files = []
         
+        # Get temporary files from session (space-free copies)
+        temp_files = page.session.get("temp_files")
+        if temp_files is None:
+            temp_files = []
+        
+        def sanitize_filename(filename):
+            """Replace spaces with underscores and remove other problematic characters"""
+            # Replace spaces with underscores
+            sanitized = filename.replace(' ', '_')
+            # Remove or replace other problematic characters if needed
+            # For now, just handle spaces as requested
+            return sanitized
+        
+        def copy_files_to_temp_directory(file_paths):
+            """Copy selected files to temporary directory with sanitized names"""
+            try:
+                # Create a temporary directory in the storage/temp folder
+                temp_base_dir = os.path.join(os.getcwd(), "storage", "temp")
+                os.makedirs(temp_base_dir, exist_ok=True)
+                
+                # Create a unique subdirectory for this session
+                temp_dir = tempfile.mkdtemp(dir=temp_base_dir, prefix="mdi_files_")
+                logger.info(f"Created temporary directory: {temp_dir}")
+                
+                temp_file_paths = []
+                temp_file_info = []
+                
+                for original_path in file_paths:
+                    try:
+                        # Get the original filename
+                        original_filename = os.path.basename(original_path)
+                        
+                        # Sanitize the filename (replace spaces with underscores)
+                        sanitized_filename = sanitize_filename(original_filename)
+                        
+                        # Create the destination path
+                        temp_file_path = os.path.join(temp_dir, sanitized_filename)
+                        
+                        # Copy the file
+                        shutil.copy2(original_path, temp_file_path)
+                        
+                        # Store the paths
+                        temp_file_paths.append(temp_file_path)
+                        temp_file_info.append({
+                            'original_path': original_path,
+                            'original_filename': original_filename,
+                            'temp_path': temp_file_path,
+                            'sanitized_filename': sanitized_filename
+                        })
+                        
+                        logger.info(f"Copied '{original_filename}' to '{sanitized_filename}' in temp directory")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to copy file {original_path}: {str(e)}")
+                        continue
+                
+                # Store in session
+                page.session.set("temp_directory", temp_dir)
+                page.session.set("temp_files", temp_file_paths)
+                page.session.set("temp_file_info", temp_file_info)
+                
+                logger.info(f"Successfully copied {len(temp_file_paths)} files to temporary directory")
+                return temp_file_paths, temp_file_info
+                
+            except Exception as e:
+                logger.error(f"Failed to create temporary directory or copy files: {str(e)}")
+                return [], []
+        
+        def clear_temp_directory():
+            """Clear the temporary directory and session data"""
+            temp_dir = page.session.get("temp_directory")
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.info(f"Cleared temporary directory: {temp_dir}")
+                except Exception as e:
+                    logger.error(f"Failed to clear temporary directory: {str(e)}")
+            
+            # Clear session data
+            page.session.set("temp_directory", None)
+            page.session.set("temp_files", [])
+            page.session.set("temp_file_info", [])
+        
         # FilePicker configuration for images and PDFs
         def on_file_picker_result(e: ft.FilePickerResultEvent):
             if e.files:
-                # Store file paths in session
+                # Store original file paths in session
                 file_paths = [file.path for file in e.files if file.path]
                 page.session.set("selected_files", file_paths)
                 logger.info(f"Selected {len(file_paths)} files: {file_paths}")
+                
+                # Copy files to temporary directory with sanitized names
+                temp_file_paths, temp_file_info = copy_files_to_temp_directory(file_paths)
+                
                 # Refresh the page to show selected files
                 page.go("/file_selector")
             else:
@@ -504,26 +596,51 @@ def file_selector_view(page):
                 allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"]
             )
         
+        def on_clear_selection(e):
+            """Clear both original selection and temporary files"""
+            clear_temp_directory()
+            page.session.set("selected_files", [])
+            page.go("/file_selector")
+        
         # Build the file list display
         file_list_controls = []
         if selected_files:
+            # Get temp file info for display
+            temp_file_info = page.session.get("temp_file_info", [])
+            
             file_list_controls.append(
                 ft.Text(f"Selected {len(selected_files)} files:", 
                        size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
             )
-            for i, file_path in enumerate(selected_files, 1):
-                file_name = file_path.split('/')[-1] if '/' in file_path else file_path.split('\\')[-1]
+            
+            # Show temporary directory info
+            temp_dir = page.session.get("temp_directory")
+            if temp_dir:
                 file_list_controls.append(
-                    ft.Text(f"{i}. {file_name}", 
-                           size=14, color=colors['secondary_text'])
+                    ft.Text(f"Temporary directory: {temp_dir}", 
+                           size=12, color=colors['secondary_text'])
                 )
+                file_list_controls.append(ft.Container(height=5))
+            
+            # Display file information
+            for i, info in enumerate(temp_file_info, 1):
+                original_name = info.get('original_filename', 'Unknown')
+                sanitized_name = info.get('sanitized_filename', 'Unknown')
+                
+                if original_name != sanitized_name:
+                    file_list_controls.append(
+                        ft.Text(f"{i}. {original_name} → {sanitized_name}", 
+                               size=14, color=colors['secondary_text'])
+                    )
+                else:
+                    file_list_controls.append(
+                        ft.Text(f"{i}. {original_name}", 
+                               size=14, color=colors['secondary_text'])
+                    )
+            
             file_list_controls.append(ft.Container(height=10))
             file_list_controls.append(
-                ft.ElevatedButton("Clear Selection", 
-                                on_click=lambda e: [
-                                    page.session.set("selected_files", []),
-                                    page.go("/file_selector")
-                                ])
+                ft.ElevatedButton("Clear Selection", on_click=on_clear_selection)
             )
         else:
             file_list_controls.append(
@@ -536,6 +653,8 @@ def file_selector_view(page):
             ft.Container(height=20),
             ft.Text("Select image and PDF files from your local file system", 
                    size=16, color=colors['primary_text']),
+            ft.Text("Files are automatically copied to a temporary directory with space-free names", 
+                   size=14, color=colors['secondary_text']),
             ft.Container(height=10),
             ft.ElevatedButton("Open File Picker", 
                             on_click=open_file_picker),
@@ -598,13 +717,333 @@ def file_selector_view(page):
 # derivatives_view()
 # Purpose: Renders the derivatives creation page for processing selected files
 # Parameters: page - Flet page object for rendering
-# Returns: ft.Column containing derivatives page layout (placeholder)
+# Returns: ft.Column containing derivatives page layout with processing functionality
 # -------------------------------------------------------------------------------
 def derivatives_view(page):
     logger.info("Derivatives Creation page")
+    
+    # Get theme-appropriate colors
+    colors = get_theme_colors(page)
+    
+    # Get current mode and files from session
+    current_mode = page.session.get("selected_mode")
+    selected_files = page.session.get("selected_files")
+    if selected_files is None:
+        selected_files = []
+    
+    # Use temporary files (space-free copies) for processing
+    temp_files = page.session.get("temp_files")
+    if temp_files is None:
+        temp_files = []
+    
+    # Use temp files for processing if available, otherwise fall back to original files
+    processing_files = temp_files if temp_files else selected_files
+    total_files = len(processing_files)
+    
+    # Create UI components
+    status_text = ft.Text("Ready to create derivatives", size=16, color=colors['primary_text'])
+    progress_bar = ft.ProgressBar(width=400, value=0)
+    results_column = ft.Column([], scroll=ft.ScrollMode.AUTO, height=300)
+    
+    def create_derivatives_for_files():
+        """Process all selected files and create derivatives"""
+        
+        def create_single_derivative(file_path, mode, derivative_type='thumbnail'):
+            """Create a single derivative for a file based on mode and type"""
+            try:
+                # Check for spaces in the file path
+                if any(char.isspace() for char in file_path):
+                    error_msg = f"File path '{file_path}' contains spaces! This should not happen with temp files."
+                    logger.error(error_msg)
+                    return False, error_msg
+                
+                # Parse file path components
+                dirname, basename = os.path.split(file_path)
+                root, ext = os.path.splitext(basename)
+                
+                if mode == 'Alma':
+                    # Alma mode - create thumbnail only
+                    derivative_path = os.path.join(dirname, f"{root}_thumbnail.jpg")
+                    
+                    # Define options for Alma thumbnails
+                    options = {
+                        'trim': False,
+                        'height': 200,
+                        'width': 200,
+                        'quality': 85,
+                        'type': 'thumbnail'
+                    }
+                    
+                    # Process based on file type
+                    if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png']:
+                        generate_thumbnail(file_path, derivative_path, options)
+                        logger.info(f"Created Alma thumbnail: {derivative_path}")
+                        return True, derivative_path
+                    elif ext.lower() == '.pdf':
+                        cmd = f'magick convert "{file_path}[0]" "{derivative_path}"'
+                        return_code = call(cmd, shell=True)
+                        if return_code == 0:
+                            logger.info(f"Created Alma PDF thumbnail: {derivative_path}")
+                            return True, derivative_path
+                        else:
+                            error_msg = f"Failed to create PDF thumbnail with command: {cmd}"
+                            logger.error(error_msg)
+                            return False, error_msg
+                    else:
+                        error_msg = f"Unsupported file type for Alma: {ext}"
+                        logger.error(error_msg)
+                        return False, error_msg
+                
+                elif mode == 'CollectionBuilder':
+                    # CollectionBuilder mode - create thumbnail or small
+                    if derivative_type == 'thumbnail':
+                        derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                        options = {
+                            'trim': False,
+                            'height': 400,
+                            'width': 400,
+                            'quality': 85,
+                            'type': 'thumbnail'
+                        }
+                    elif derivative_type == 'small':
+                        derivative_path = os.path.join(dirname, f"{root}_SMALL.jpg")
+                        options = {
+                            'trim': False,
+                            'height': 800,
+                            'width': 800,
+                            'quality': 85,
+                            'type': 'thumbnail'
+                        }
+                    else:
+                        error_msg = f"Unknown derivative type for CollectionBuilder: {derivative_type}"
+                        logger.error(error_msg)
+                        return False, error_msg
+                    
+                    # Process based on file type
+                    if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png']:
+                        generate_thumbnail(file_path, derivative_path, options)
+                        logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
+                        return True, derivative_path
+                    elif ext.lower() == '.pdf':
+                        cmd = f'magick convert "{file_path}[0]" "{derivative_path}"'
+                        return_code = call(cmd, shell=True)
+                        if return_code == 0:
+                            logger.info(f"Created CollectionBuilder {derivative_type} from PDF: {derivative_path}")
+                            return True, derivative_path
+                        else:
+                            error_msg = f"Failed to create PDF {derivative_type} with command: {cmd}"
+                            logger.error(error_msg)
+                            return False, error_msg
+                    else:
+                        error_msg = f"Unsupported file type for CollectionBuilder: {ext}"
+                        logger.error(error_msg)
+                        return False, error_msg
+                else:
+                    error_msg = f"Unsupported mode: {mode}"
+                    logger.error(error_msg)
+                    return False, error_msg
+                    
+            except Exception as e:
+                error_msg = f"Exception in create_single_derivative: {str(e)}"
+                logger.error(error_msg)
+                return False, error_msg
+        
+        # Main processing logic
+        if not current_mode:
+            status_text.value = "❌ No mode selected. Please go to Settings first."
+            status_text.color = colors['primary_text']
+            page.update()
+            return
+            
+        if not processing_files:
+            status_text.value = "❌ No files selected. Please go to File Selector first."
+            status_text.color = colors['primary_text']
+            page.update()
+            return
+        
+        # Check if we're using temp files and log the difference
+        if temp_files:
+            logger.info(f"Starting derivative creation for {total_files} files in {current_mode} mode using temporary space-free copies")
+        else:
+            logger.info(f"Starting derivative creation for {total_files} files in {current_mode} mode using original files")
+            
+        status_text.value = f"🔄 Processing {total_files} files in {current_mode} mode..."
+        status_text.color = colors['primary_text']
+        page.update()
+        
+        processed_count = 0
+        success_count = 0
+        error_count = 0
+        
+        for index, file_path in enumerate(processing_files):
+            try:
+                # Get display name (show original filename if using temp files)
+                if temp_files and index < len(selected_files):
+                    display_name = os.path.basename(selected_files[index])
+                else:
+                    display_name = os.path.basename(file_path)
+                
+                logger.info(f"Processing file {index + 1}/{total_files}: {file_path}")
+                
+                # Update progress
+                progress_bar.value = index / total_files
+                status_text.value = f"🔄 Processing file {index + 1}/{total_files}: {display_name}"
+                page.update()
+                
+                # Create derivatives based on mode
+                if current_mode == "CollectionBuilder":
+                    # Create thumbnail
+                    thumbnail_success, thumbnail_result = create_single_derivative(file_path, current_mode, 'thumbnail')
+                    
+                    # Create small derivative
+                    small_success, small_result = create_single_derivative(file_path, current_mode, 'small')
+                    
+                    # Log results
+                    if thumbnail_success and small_success:
+                        result_text = f"✅ {display_name} - Created thumbnail and small derivatives"
+                        success_count += 1
+                        logger.info(f"Successfully created derivatives for {file_path}")
+                    else:
+                        result_text = f"❌ {display_name} - Failed to create derivatives"
+                        if not thumbnail_success:
+                            logger.error(f"Thumbnail failed: {thumbnail_result}")
+                        if not small_success:
+                            logger.error(f"Small derivative failed: {small_result}")
+                        error_count += 1
+                        
+                elif current_mode == "Alma":
+                    # Create thumbnail only for Alma
+                    thumbnail_success, thumbnail_result = create_single_derivative(file_path, current_mode, 'thumbnail')
+                    
+                    if thumbnail_success:
+                        result_text = f"✅ {display_name} - Created thumbnail derivative"
+                        success_count += 1
+                        logger.info(f"Successfully created thumbnail for {file_path}")
+                    else:
+                        result_text = f"❌ {display_name} - Failed to create thumbnail"
+                        logger.error(f"Thumbnail failed: {thumbnail_result}")
+                        error_count += 1
+                else:
+                    result_text = f"❌ {display_name} - Unsupported mode: {current_mode}"
+                    error_count += 1
+                    logger.error(f"Unsupported mode {current_mode} for file {file_path}")
+                
+                # Add result to UI
+                results_column.controls.append(
+                    ft.Text(result_text, size=12, color=colors['primary_text'])
+                )
+                
+                processed_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                error_text = f"❌ {display_name} - Error: {str(e)}"
+                results_column.controls.append(
+                    ft.Text(error_text, size=12, color=colors['primary_text'])
+                )
+                logger.error(f"Exception processing {file_path}: {str(e)}")
+            
+            # Update progress
+            progress_bar.value = (index + 1) / total_files
+            page.update()
+        
+        # Final status update
+        progress_bar.value = 1.0
+        status_text.value = f"✅ Completed! Processed: {processed_count}, Success: {success_count}, Errors: {error_count}"
+        logger.info(f"Derivative creation completed. Processed: {processed_count}, Success: {success_count}, Errors: {error_count}")
+        page.update()
+    
+    def on_create_derivatives_click(e):
+        """Handle the create derivatives button click"""
+        create_derivatives_for_files()
+    
+    def on_clear_results_click(e):
+        """Clear the results display"""
+        results_column.controls.clear()
+        progress_bar.value = 0
+        status_text.value = "Ready to create derivatives"
+        page.update()
+        logger.info("Results cleared")
+    
+    # Prepare status information controls
+    status_info_controls = [
+        ft.Text(f"Current Mode: {current_mode or 'None selected'}", 
+               size=16, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+        ft.Text(f"Selected Files: {total_files}", 
+               size=16, weight=ft.FontWeight.BOLD, color=colors['container_text'])
+    ]
+    
+    # Add temp files information if available
+    if temp_files:
+        status_info_controls.append(
+            ft.Text("✅ Using temporary space-free copies for processing", 
+                   size=14, color=colors['container_text'])
+        )
+    else:
+        status_info_controls.append(
+            ft.Text("⚠️ Using original files (may have spaces in names)", 
+                   size=14, color=colors['container_text'])
+        )
+    
+    status_info_controls.extend([
+        ft.Text("Derivative Types:", size=14, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+        ft.Text("• CollectionBuilder: thumbnail + small derivatives", 
+               size=12, color=colors['container_text']),
+        ft.Text("• Alma: thumbnail derivative only", 
+               size=12, color=colors['container_text'])
+    ])
+    
+    # Create the UI layout
     return ft.Column([
-        ft.Text("Derivatives Page")
-    ], alignment="center")
+        ft.Text("Derivatives Creation", size=24, weight=ft.FontWeight.BOLD),
+        ft.Divider(height=20, color=colors['divider']),
+        
+        # Status information
+        ft.Container(
+            content=ft.Column(status_info_controls),
+            padding=ft.padding.all(15),
+            border=ft.border.all(1, colors['border']),
+            border_radius=10,
+            bgcolor=colors['container_bg'],
+            margin=ft.margin.symmetric(vertical=10)
+        ),
+        
+        # Control buttons
+        ft.Row([
+            ft.ElevatedButton(
+                "Create Derivatives",
+                on_click=on_create_derivatives_click,
+                disabled=(not current_mode or total_files == 0)
+            ),
+            ft.ElevatedButton(
+                "Clear Results",
+                on_click=on_clear_results_click
+            )
+        ], alignment=ft.MainAxisAlignment.CENTER),
+        
+        ft.Divider(height=10, color=colors['divider']),
+        
+        # Progress and status
+        status_text,
+        progress_bar,
+        
+        ft.Divider(height=10, color=colors['divider']),
+        
+        # Results display
+        ft.Container(
+            content=ft.Column([
+                ft.Text("Processing Results:", size=16, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                results_column
+            ]),
+            padding=ft.padding.all(15),
+            border=ft.border.all(1, colors['border']),
+            border_radius=10,
+            bgcolor=colors['container_bg'],
+            height=350,
+            expand=True
+        )
+        
+    ], alignment="center", scroll=ft.ScrollMode.AUTO, expand=True)
 
 # -------------------------------------------------------------------------------
 # storage_view()

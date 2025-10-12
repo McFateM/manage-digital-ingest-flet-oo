@@ -190,7 +190,6 @@ def load_radio_options_from_json(fname):
         print(f"Error: {content}")
         return [ft.Text(f"Error loading options from {fname}.")]
 
-
 # Connect to Azure Blob Storage
 # ----------------------------------------------------------------------
 # Retrieve the connection string for use with the application. The storage
@@ -430,6 +429,15 @@ def create_derivative(page, mode, derivative_type, index, url, local_storage_pat
     if mode == 'Alma':
         derivative_path = f"/Users/mcfatem/OBJs"
 
+        # Define options for Alma thumbnails
+        options = {
+            'trim': False,
+            'height': 200,
+            'width': 200,
+            'quality': 85,
+            'type': 'thumbnail'
+        }
+
         # If original is an image...
         if ext.lower( ) in ['.tiff', '.tif', '.jpg', '.jpeg', '.png']:
             generate_thumbnail(sanitized, derivative_path, options)
@@ -443,7 +451,7 @@ def create_derivative(page, mode, derivative_type, index, url, local_storage_pat
 
         else:
             txt = f"Sorry, we can't create a thumbnail for '{sanitized}'"
-            utils.show_messsage(page, txt, is_error=True)
+            utils.show_message(page, txt, is_error=True)
 
         return derivative_path
 
