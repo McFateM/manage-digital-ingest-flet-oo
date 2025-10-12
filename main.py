@@ -22,6 +22,12 @@ logger.info("Logger initialized - writing to mdi.log and SnackBarHandler attache
 
 # --- UNIVERSAL FUNCTIONS ------------------------------------------------------
 
+# -------------------------------------------------------------------------------
+# get_theme_colors()
+# Purpose: Returns theme-appropriate color scheme based on current theme mode
+# Parameters: page - Flet page object containing theme mode information
+# Returns: Dictionary of color constants for UI theming
+# -------------------------------------------------------------------------------
 def get_theme_colors(page):
     """Get theme-appropriate colors based on current theme mode"""
     # Detect if we're in dark mode
@@ -56,8 +62,12 @@ def get_theme_colors(page):
 
 # --- ROUTE HANDLERS ------------------------------------------------------------
 
-# Home view with markdown content
-# -----------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+# home_view()
+# Purpose: Renders the main home page with markdown content and app branding
+# Parameters: page - Flet page object for rendering and theme management
+# Returns: ft.Column containing the complete home page layout
+# -------------------------------------------------------------------------------
 def home_view(page):
     logger.info("Loaded Home page")
 
@@ -115,6 +125,12 @@ def home_view(page):
     return x
 
 
+# -------------------------------------------------------------------------------
+# about_view()
+# Purpose: Renders the about page with markdown content and demo logging buttons
+# Parameters: page - Flet page object for rendering and theme management
+# Returns: ft.Column containing the about page layout with demo controls
+# -------------------------------------------------------------------------------
 def about_view(page):
     logger.info("Loaded About page")
     
@@ -187,6 +203,12 @@ def about_view(page):
 
     return x
 
+# -------------------------------------------------------------------------------
+# exit_view()
+# Purpose: Renders the exit page with application termination functionality
+# Parameters: page - Flet page object for window control
+# Returns: ft.Column containing exit page layout with close button
+# -------------------------------------------------------------------------------
 def exit_view(page):
     logger.info("Loaded Exit page")
     return ft.Column([
@@ -194,6 +216,12 @@ def exit_view(page):
         ft.ElevatedButton("Exit App", on_click=lambda e: page.window_close())
     ], alignment="center")
 
+# -------------------------------------------------------------------------------
+# settings_view()
+# Purpose: Renders the settings page with configuration dropdowns and containers
+# Parameters: page - Flet page object for session management and theme handling
+# Returns: ft.Column containing settings page with theme and selector containers
+# -------------------------------------------------------------------------------
 def settings_view(page):
     logger.info("Loaded Settings page")
     
@@ -404,6 +432,13 @@ def settings_view(page):
         ft.Divider(height=20, color=colors['divider'])
     ], alignment="center", scroll=ft.ScrollMode.AUTO, expand=True)
 
+# -------------------------------------------------------------------------------
+# file_selector_view()
+# Purpose: Renders file selection interface with different paths for FilePicker, 
+#          Google Sheets, and CSV options based on user settings
+# Parameters: page - Flet page object for session and overlay management
+# Returns: ft.Column containing file selector interface specific to chosen method
+# -------------------------------------------------------------------------------
 def file_selector_view(page):
     logger.info("File Selector page")
     
@@ -429,7 +464,9 @@ def file_selector_view(page):
         logger.info("Executing FilePicker path")
         
         # Get selected files from session
-        selected_files = page.session.get("selected_files", [])
+        selected_files = page.session.get("selected_files")
+        if selected_files is None:
+            selected_files = []
         
         # FilePicker configuration for images and PDFs
         def on_file_picker_result(e: ft.FilePickerResultEvent):
@@ -546,12 +583,24 @@ def file_selector_view(page):
                             on_click=lambda e: page.go("/settings"))
         ], alignment="center")
 
+# -------------------------------------------------------------------------------
+# derivatives_view()
+# Purpose: Renders the derivatives creation page for processing selected files
+# Parameters: page - Flet page object for rendering
+# Returns: ft.Column containing derivatives page layout (placeholder)
+# -------------------------------------------------------------------------------
 def derivatives_view(page):
     logger.info("Derivatives Creation page")
     return ft.Column([
         ft.Text("Derivatives Page")
     ], alignment="center")
 
+# -------------------------------------------------------------------------------
+# storage_view()
+# Purpose: Renders the Azure storage interface page for cloud storage operations
+# Parameters: page - Flet page object for rendering
+# Returns: ft.Column containing storage page layout (placeholder)
+# -------------------------------------------------------------------------------
 def storage_view(page):
     logger.info("Azure Storage page")
     return ft.Column([
@@ -568,6 +617,12 @@ VIEWS = {
     "/storage": storage_view,
 }
 
+# -------------------------------------------------------------------------------
+# build_appbar()
+# Purpose: Constructs the application navigation bar with icon buttons for all pages
+# Parameters: page - Flet page object for navigation routing
+# Returns: ft.AppBar containing navigation icons and routing handlers
+# -------------------------------------------------------------------------------
 def build_appbar(page):
     return ft.AppBar(
         title=ft.Text("MDI"),
@@ -582,6 +637,12 @@ def build_appbar(page):
         ]
     )
 
+# -------------------------------------------------------------------------------
+# route_change()
+# Purpose: Handles page navigation and route changes, sets up appbar and divider
+# Parameters: e - Flet event object containing page and route information
+# Returns: None (modifies page controls directly)
+# -------------------------------------------------------------------------------
 def route_change(e):
     page = e.page
     route = e.route
@@ -598,6 +659,12 @@ def route_change(e):
     view_func = VIEWS.get(route, home_view)
     page.add(view_func(page))
 
+# -------------------------------------------------------------------------------
+# main()
+# Purpose: Application entry point - initializes page settings, logging, and routing
+# Parameters: page - Flet page object for application configuration
+# Returns: None (configures page and starts application)
+# -------------------------------------------------------------------------------
 def main(page: ft.Page):
     page.title = "Manage Digital Ingest: a Flet Multi-Page App"
     
