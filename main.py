@@ -54,16 +54,6 @@ def get_theme_colors(page):
             'container_label': ft.Colors.GREY_700  # Dark grey for labels/subtitles
         }
 
-def show_snack(page, message, color="green"):
-    # Universal snack bar
-    page.snack_bar = ft.SnackBar(
-        content=ft.Text(message),
-        bgcolor=color,
-        action="OK"
-    )
-    page.snack_bar.open = True
-    page.update( )
-
 # --- ROUTE HANDLERS ------------------------------------------------------------
 
 # Home view with markdown content
@@ -213,8 +203,7 @@ def exit_view(page):
     logger.info("Loaded Exit page")
     return ft.Column([
         ft.Text("Exit Page"),
-        ft.ElevatedButton("Exit App", on_click=lambda e: page.window_close()),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Exit SnackBar!"))
+        ft.ElevatedButton("Exit App", on_click=lambda e: page.window_close())
     ], alignment="center")
 
 def settings_view(page):
@@ -424,43 +413,37 @@ def settings_view(page):
         file_selector_container,
         storage_container,
         collection_container,
-        ft.Divider(height=20, color=colors['divider']),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Settings SnackBar!"))
+        ft.Divider(height=20, color=colors['divider'])
     ], alignment="center", scroll=ft.ScrollMode.AUTO, expand=True)
 
 def picker_view(page):
     logger.info("Loaded Picker page")
     return ft.Column([
-        ft.Text("Picker Page"),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Picker SnackBar!"))
+        ft.Text("Picker Page")
     ], alignment="center")
 
 def sheet_view(page):
     logger.info("Loaded Sheet page")
     return ft.Column([
-        ft.Text("Sheet Page"),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Sheet SnackBar!"))
+        ft.Text("Sheet Page")
     ], alignment="center")
 
 def fuzzy_search_view(page):
     logger.info("Loaded Fuzzy Search page")
     return ft.Column([
-        ft.Text("Fuzzy Search Page"),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Fuzzy Search SnackBar!"))
+        ft.Text("Fuzzy Search Page")
     ], alignment="center")
 
 def derivatives_view(page):
     logger.info("Loaded Derivatives page")
     return ft.Column([
-        ft.Text("Derivatives Page"),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Derivatives SnackBar!"))
+        ft.Text("Derivatives Page")
     ], alignment="center")
 
 def storage_view(page):
     logger.info("Loaded Storage page")
     return ft.Column([
-        ft.Text("Storage Page"),
-        ft.ElevatedButton("Show SnackBar", on_click=lambda e: show_snack(page, "Storage SnackBar!"))
+        ft.Text("Storage Page")
     ], alignment="center")
 
 VIEWS = {
