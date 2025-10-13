@@ -1430,12 +1430,6 @@ def file_selector_view(page):
                 # Clear selected files if no column is selected
                 page.session.set("selected_files", [])
             
-            # Make Step 4 visible if we have files to process
-            step4_container = page.session.get("_step4_container")
-            if step4_container:
-                step4_container.visible = bool(page.session.get("selected_files"))
-                page.update()  # Update the UI immediately after changing visibility
-            
             # Update display to show selection status
             update_csv_display()
         
@@ -1469,15 +1463,10 @@ def file_selector_view(page):
             columns_display_container.visible = bool(current_csv_file and (current_csv_columns or current_csv_error))
             results_display_container.visible = bool(current_selected_column)
             
-            # Clear and update the main display
+            # Clear current display
             csv_file_display.controls.clear()
-            csv_file_display.controls.extend([
-                file_selection_container,
-                columns_display_container,
-                results_display_container
-            ])
             
-            # Create file selection content
+            # File Selection Section
             file_selection_content = ft.Column([
                 ft.Text("Step 1: Select CSV File", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.ElevatedButton("Select File", on_click=open_csv_file_picker),
@@ -1635,61 +1624,63 @@ def file_selector_view(page):
                 page.session.set("_results_tile", results_tile)
                 results_display_container.content = results_tile
                 
-                # Create Step 4 container first
-                step4_container = ft.Container(
+                # Controls list for the main display
+                controls=[
+                        results_content,
+                        ft.Divider(height=10, color=colors['divider']),
+                        ft.Container(
                             content=ft.Column([
                                 ft.Text("Step 4: Fuzzy Search", size=16, weight=ft.FontWeight.BOLD),
                                 ft.Text("Select a directory to search for matching files:", size=14),
                                 ft.Row([
                                     ft.ElevatedButton(
-                                        text="Select Search Directory",
+                                        "Select Search Directory",
                                         on_click=lambda e: search_dir_picker.get_directory_path(
                                             dialog_title="Select Directory for Fuzzy Search"
                                         )
                                     ),
                                     ft.ElevatedButton(
-                                        text="Start Fuzzy Search",
+                                        "Start Fuzzy Search",
                                         on_click=lambda e: do_fuzzy_search(page, colors),
                                         disabled=not bool(page.session.get("search_directory"))
-                                    ) if selected_files else ft.Container()
+                                    ) if selected_files else ft.Container(),
                                 ]),
                                 ft.Text(
-                                    value=f"Search directory: {page.session.get('search_directory') or 'Not selected'}", 
+                                    f"Search directory: {page.session.get('search_directory') or 'Not selected'}", 
                                     size=12,
                                     color=colors['secondary_text']
                                 ),
+                                # Container for search results
                                 ft.Container(
                                     content=ft.Column([
-                                        ft.Text(
-                                            value="Fuzzy Search Results:", 
-                                            size=14, 
-                                            weight=ft.FontWeight.BOLD,
-                                            visible=page.session.get("selected_paths") is not None
-                                        ),
+                                        ft.Text("Fuzzy Search Results:", 
+                                               size=14, 
+                                               weight=ft.FontWeight.BOLD,
+                                               visible=page.session.get("selected_paths") is not None),
                                         ft.Column(
-                                            controls=[],
+                                            controls=[],  # Will be populated with results
                                             scroll=ft.ScrollMode.AUTO,
                                             height=150,
                                             visible=page.session.get("selected_paths") is not None
                                         )
                                     ]),
-                                    visible=page.session.get("selected_paths") is not None
+                                    visible=page.session.get("search_directory") is not None
                                 )
                             ]),
                             padding=10,
                             border=ft.border.all(1, colors['border']),
                             border_radius=10,
-                            bgcolor=colors['container_bg'],
-                            visible=bool(selected_files)  # Set visibility based on whether files are selected
+                            bgcolor=colors['container_bg']
                         )
-                page.session.set("_step4_container", step4_container)
-
-                # Store step4_container in results_content
-                results_display_container.content = ft.Column([
-                    results_content,
-                    ft.Divider(height=10, color=colors['divider']),
-                    step4_container
-                ])
+                    ]
+                
+            
+            # Add all containers to the display
+            csv_file_display.controls.extend([
+                file_selection_container,
+                columns_display_container,
+                results_display_container
+            ])
             
             page.update()
         

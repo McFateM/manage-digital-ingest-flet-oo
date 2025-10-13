@@ -31,17 +31,17 @@ class SnackBarHandler(logging.Handler):
             if not hasattr(page, 'snack_bar') or page.snack_bar is None:
                 page.snack_bar = ft.SnackBar(content=ft.Text(msg))
 
-            # Color by level
-            if record.levelno >= logging.ERROR:
-                bgcolor = ft.Colors.RED_600
-            elif record.levelno >= logging.WARNING:
-                bgcolor = ft.Colors.ORANGE_400
-            else:
-                bgcolor = ft.Colors.GREEN_600
-
-            page.snack_bar.content.value = msg
-            page.snack_bar.bgcolor = bgcolor
-            page.open(page.snack_bar)
-            page.update()
+            # Only show warnings and errors in snackbar
+            if record.levelno >= logging.WARNING:
+                # Color by level
+                if record.levelno >= logging.ERROR:
+                    bgcolor = ft.Colors.RED_600
+                else:
+                    bgcolor = ft.Colors.ORANGE_400
+                    
+                page.snack_bar.content.value = msg
+                page.snack_bar.bgcolor = bgcolor
+                page.open(page.snack_bar)
+                page.update()
         except Exception:
             self.handleError(record)

@@ -3,10 +3,105 @@ import os
 import utils
 from thumbnail import generate_thumbnail
 from subprocess import call
+from thefuzz import fuzz
 # from azure.identity import DefaultAzureCredential
 # from azure.storage.blob import BlobServiceClient
 import json
 import sys
+import logging
+
+# Fuzzy search functions
+# ----------------------------------------------------------------------
+def perform_fuzzy_search(base_path, target_filename, threshold=90):
+    """
+    Recursively search for files in base_path and find the best match for target_filename
+    using fuzzy string matching with a given threshold.
+    
+    Args:
+        base_path (str): The directory to start searching from
+        target_filename (str): The filename to match against
+        threshold (int): The minimum fuzzy match ratio to consider a match (0-100)
+        
+    Returns:
+        tuple: (best_match_path, best_match_ratio) or (None, 0) if no match found
+    """
+    try:
+        best_match_path = None
+        best_match_ratio = 0
+        
+        for root, dirs, files in os.walk(base_path):
+            for filename in files:
+                # Calculate fuzzy match ratio between the current filename and target
+                ratio = fuzz.ratio(filename.lower(), target_filename.lower())
+                
+                # Update best match if this ratio is higher
+                if ratio > best_match_ratio:
+                    best_match_ratio = ratio
+                    best_match_path = os.path.join(root, filename)
+                    
+                    # If we found a perfect match, we can return immediately
+                    if ratio == 100:
+                        return (best_match_path, ratio)
+        
+        # Only return the match if it meets the threshold
+        if best_match_ratio >= threshold:
+            return (best_match_path, best_match_ratio)
+        else:
+            return (None, 0)
+            
+    except Exception as e:
+        logging.error(f"Error in fuzzy search: {str(e)}")
+        return (None, 0)
+
+
+def perform_fuzzy_search_batch(base_path, target_filenames, threshold=90, progress_callback=None, cancel_check=None):
+    """
+    Perform fuzzy search for multiple filenames sequentially with progress tracking and cancellation support.
+    
+    Args:
+        base_path (str): The directory to start searching from
+        target_filenames (list): List of filenames to match against
+        threshold (int): The minimum fuzzy match ratio to consider a match (0-100)
+        progress_callback (callable): Optional callback function to report progress (0.0 to 1.0)
+        cancel_check (callable): Optional function that returns True if search should be cancelled
+        
+    Returns:
+        dict: Dictionary mapping target filenames to (match_path, ratio) tuples, or None if cancelled
+    """
+    results = {}
+    total_files = len(target_filenames)
+    
+    if progress_callback:
+        # Start with 0% progress
+        progress_callback(0)
+    
+    for index, filename in enumerate(target_filenames):
+        # Check for cancellation
+        if cancel_check and cancel_check():
+            logging.info("Fuzzy search cancelled by user")
+            return None
+            
+        logging.info(f"Searching for match to '{filename}' ({index + 1}/{total_files})")
+        
+        # Update progress after each file
+        if progress_callback:
+            progress = (index + 1) / total_files
+            progress_callback(progress)
+            
+        match_path, ratio = perform_fuzzy_search(base_path, filename, threshold)
+        results[filename] = (match_path, ratio)
+        
+        # Log the result
+        if match_path and ratio >= threshold:
+            logging.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
+        else:
+            logging.info(f"No match found for '{filename}' meeting {threshold}% threshold")
+    
+    # Only show 100% if we completed the search (not cancelled)
+    if progress_callback:
+        progress_callback(1.0)
+        
+    return results
 
 # # Example AppBar component
 # def build_app_bar( ):
@@ -106,10 +201,8 @@ def process_files(e):
 
     page = e.page
     logger = page.session.get("logger")
-    progress_bar = page.session.get("progress_bar")
-
     page.result_text.value = "Processing..."
-    page.update( )
+    page.update()
 
     files = e.page.session.get("selected_object_paths")
     directory = os.path.dirname(files[0]) if files else "N/A"
@@ -119,7 +212,8 @@ def process_files(e):
         for file in files:
             logger.info(f"  - {file.name} (Path: {file.path})")
 
-        done = 0.0
+        processed = 0
+        total = len(files) * 2  # Each file needs 2 derivatives
 
         for file in files:
             derivative = utils.create_derivative(page,
@@ -130,10 +224,10 @@ def process_files(e):
                 local_storage_path=file.path,
                 blob_service_client=None
             )
-            done += 0.5
-            progress_bar.value = done / len(files)  # Update progress bar value
+            processed += 1
+            logger.info(f"Progress: {processed}/{total} derivatives processed ({processed/total:.0%})")
             page.result_text.value += f"\n- {derivative}"  
-            page.update( )
+            page.update()
 
             derivative = utils.create_derivative(page,
                 mode=page.session.get("mode"),
@@ -143,10 +237,10 @@ def process_files(e):
                 local_storage_path=file.path,
                 blob_service_client=None
             )
-            done += 0.5
-            progress_bar.value = done / len(files)  # Update progress bar value
+            processed += 1
+            logger.info(f"Progress: {processed}/{total} derivatives processed ({processed/total:.0%})")
             page.result_text.value += f"\n- {derivative}"  
-            page.update( )
+            page.update()
 
         utils.show_message(page, f"Processed {len(files)} files from {directory}.")
                 
