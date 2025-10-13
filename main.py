@@ -9,6 +9,14 @@ from subprocess import call
 from logger import SnackBarHandler
 from thumbnail import generate_thumbnail
 
+# Optional imports for CSV processing
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+    pd = None
+
 # Simple thumbnail generation function to replace missing thumbnail module
 def generate_pdf_thumbnail(input_path, output_path, options):
     """
@@ -722,21 +730,262 @@ def file_selector_view(page):
     
     elif current_file_option == "CSV":
         logger.info("Executing CSV path")
+        
+        # Get selected CSV file from session
+        selected_csv_file = page.session.get("selected_csv_file")
+        selected_column = page.session.get("selected_csv_column")
+        csv_columns = page.session.get("csv_columns")
+        
+        # Debug session data
+        logger.info(f"CSV view - selected_csv_file: {selected_csv_file}")
+        logger.info(f"CSV view - selected_column: {selected_column}")
+        logger.info(f"CSV view - csv_columns: {csv_columns}")
+        logger.info(f"CSV view - csv_columns type: {type(csv_columns)}")
+        
+        def read_csv_file(file_path):
+            """Read CSV/Excel file and extract column headers"""
+            try:
+                if not PANDAS_AVAILABLE:
+                    return None, "pandas library not available. Install with: pip install pandas openpyxl"
+                
+                # Determine file type and read accordingly
+                if file_path.lower().endswith('.csv'):
+                    df = pd.read_csv(file_path)
+                elif file_path.lower().endswith(('.xlsx', '.xls')):
+                    df = pd.read_excel(file_path)
+                elif file_path.lower().endswith('.numbers'):
+                    # Numbers files require special handling
+                    logger.warning("Numbers files require manual conversion to CSV or Excel format")
+                    return None, "Numbers files are not directly supported. Please export to CSV or Excel format."
+                else:
+                    return None, f"Unsupported file format: {file_path}"
+                
+                # Get column names
+                columns = list(df.columns)
+                logger.info(f"Found {len(columns)} columns in CSV file: {columns}")
+                
+                return columns, None
+                
+            except Exception as e:
+                logger.error(f"Error reading file {file_path}: {str(e)}")
+                return None, f"Error reading file: {str(e)}"
+        
+        # CSV FilePicker configuration
+        def on_csv_file_picker_result(e: ft.FilePickerResultEvent):
+            if e.files and len(e.files) > 0:
+                # Store the selected file
+                file_path = e.files[0].path
+                page.session.set("selected_csv_file", file_path)
+                logger.info(f"Selected CSV file: {file_path}")
+                
+                # Read the file and get columns
+                columns, error = read_csv_file(file_path)
+                logger.info(f"read_csv_file returned: columns={columns}, error={error}")
+                
+                if columns:
+                    page.session.set("csv_columns", columns)
+                    page.session.set("csv_read_error", None)
+                    logger.info(f"Successfully read {len(columns)} columns from file: {columns}")
+                else:
+                    page.session.set("csv_columns", None)
+                    page.session.set("csv_read_error", error)
+                    logger.error(f"Failed to read CSV file: {error}")
+                
+                # Clear any previous column selection
+                page.session.set("selected_csv_column", None)
+                
+                # Update the display dynamically instead of navigating
+                logger.info("Updating CSV display dynamically")
+                update_csv_display()
+            else:
+                logger.info("No CSV file selected")
+        
+        def reload_csv_file():
+            """Reload the currently selected CSV file"""
+            current_csv_file = page.session.get("selected_csv_file")
+            if current_csv_file:
+                logger.info(f"Reloading CSV file: {current_csv_file}")
+                columns, error = read_csv_file(current_csv_file)
+                if columns:
+                    page.session.set("csv_columns", columns)
+                    page.session.set("csv_read_error", None)
+                    logger.info(f"Successfully reloaded {len(columns)} columns from file")
+                else:
+                    page.session.set("csv_columns", None)
+                    page.session.set("csv_read_error", error)
+                    logger.error(f"Failed to reload CSV file: {error}")
+                
+                # Update the display dynamically instead of navigating
+                update_csv_display()
+        
+        # Create CSV FilePicker
+        csv_file_picker = ft.FilePicker(
+            on_result=on_csv_file_picker_result
+        )
+        page.overlay.append(csv_file_picker)
+        
+        def open_csv_file_picker(e):
+            csv_file_picker.pick_files(
+                dialog_title="Select CSV, Excel, or Numbers File",
+                allow_multiple=False,
+                allowed_extensions=["csv", "xlsx", "xls", "numbers"]
+            )
+        
+        def on_clear_csv_selection(e):
+            """Clear CSV file selection and related data"""
+            page.session.set("selected_csv_file", None)
+            page.session.set("csv_columns", None)
+            page.session.set("selected_csv_column", None)
+            page.session.set("csv_read_error", None)
+            # Update display dynamically instead of navigating
+            update_csv_display()
+        
+        def on_column_selection_change(e):
+            """Handle column selection for filename processing"""
+            selected_col = e.control.value
+            page.session.set("selected_csv_column", selected_col)
+            logger.info(f"Selected column for filename processing: {selected_col}")
+            # Update display to show selection status
+            update_csv_display()
+        
+        # Build the CSV file display as a reference we can update
+        csv_file_display = ft.Column([], spacing=10, scroll=ft.ScrollMode.AUTO)
+        
+        def update_csv_display():
+            """Update the CSV file display with current session data"""
+            # Get fresh session data
+            current_csv_file = page.session.get("selected_csv_file")
+            current_csv_columns = page.session.get("csv_columns")
+            current_selected_column = page.session.get("selected_csv_column")
+            current_csv_error = page.session.get("csv_read_error")
+            
+            logger.info(f"update_csv_display - file: {current_csv_file}")
+            logger.info(f"update_csv_display - columns: {current_csv_columns}")
+            logger.info(f"update_csv_display - error: {current_csv_error}")
+            
+            # Clear current display
+            csv_file_display.controls.clear()
+            
+            if current_csv_file:
+                filename = os.path.basename(current_csv_file)
+                csv_file_display.controls.extend([
+                    ft.Text("Selected file:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                    ft.Text(f"📄 {filename}", size=14, color=colors['secondary_text']),
+                    ft.Text(f"Path: {current_csv_file}", size=12, color=colors['secondary_text']),
+                    ft.Container(height=10),
+                    ft.Row([
+                        ft.ElevatedButton("Clear Selection", on_click=on_clear_csv_selection),
+                        ft.ElevatedButton("Reload File", on_click=lambda e: reload_csv_file())
+                    ], alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Container(height=20)
+                ])
+                
+                # Check for read errors
+                if current_csv_error:
+                    logger.info("update_csv_display - Showing error message")
+                    csv_file_display.controls.extend([
+                        ft.Text("❌ Error reading file:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Text(current_csv_error, size=12, color=colors['secondary_text']),
+                        ft.Container(height=10)
+                    ])
+                
+                # Display columns if available
+                elif current_csv_columns and len(current_csv_columns) > 0:
+                    logger.info("update_csv_display - Showing columns")
+                    csv_file_display.controls.extend([
+                        ft.Text(f"Found {len(current_csv_columns)} columns:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Container(height=5)
+                    ])
+                    
+                    # Show column names in a more compact format if there are many columns
+                    if len(current_csv_columns) > 10:
+                        # For many columns, show them in a compact scrollable list
+                        column_list = ft.Column([
+                            ft.Text(f"{i}. {col}", size=12, color=colors['secondary_text'])
+                            for i, col in enumerate(current_csv_columns, 1)
+                        ], spacing=2, scroll=ft.ScrollMode.AUTO, height=150)
+                        
+                        csv_file_display.controls.append(
+                            ft.Container(
+                                content=column_list,
+                                border=ft.border.all(1, colors['secondary_text']),
+                                border_radius=5,
+                                padding=10
+                            )
+                        )
+                    else:
+                        # For fewer columns, show them normally
+                        for i, col in enumerate(current_csv_columns, 1):
+                            csv_file_display.controls.append(
+                                ft.Text(f"{i}. {col}", size=12, color=colors['secondary_text'])
+                            )
+                    
+                    csv_file_display.controls.extend([
+                        ft.Container(height=15),
+                        ft.Text("Select column containing filenames:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Dropdown(
+                            label="Choose filename column",
+                            value=current_selected_column,
+                            options=[ft.dropdown.Option(col) for col in current_csv_columns],
+                            on_change=on_column_selection_change,
+                            width=300
+                        ),
+                        ft.Container(height=10)
+                    ])
+                    
+                    # Show selection status
+                    if current_selected_column:
+                        csv_file_display.controls.extend([
+                            ft.Text(f"✅ Selected column: {current_selected_column}", 
+                                   size=14, color=colors['primary_text']),
+                            ft.Text("This column will be used for fuzzy filename matching and processing.", 
+                                   size=12, color=colors['secondary_text'])
+                        ])
+                    else:
+                        csv_file_display.controls.append(
+                            ft.Text("⚠️ Please select a column to continue with file processing.", 
+                                   size=12, color=colors['secondary_text'])
+                        )
+                else:
+                    # No columns found and no error
+                    logger.info("update_csv_display - No columns and no error")
+                    csv_file_display.controls.extend([
+                        ft.Text("⚠️ No columns detected in file", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Text("The file might be empty or in an unsupported format.", size=12, color=colors['secondary_text']),
+                        ft.Container(height=10)
+                    ])
+            else:
+                logger.info("update_csv_display - No file selected")
+                csv_file_display.controls.append(
+                    ft.Text("No file selected yet...", 
+                           size=14, color=colors['secondary_text'])
+                )
+            
+            page.update()
+        
+        # Initialize the display
+        update_csv_display()
+        
         return ft.Column([
             ft.Text("File Selector - CSV", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(height=20),
-            ft.Text("Upload and process a CSV file", 
+            ft.Text("Select a CSV, Excel, or Numbers file for processing", 
                    size=16, color=colors['primary_text']),
-            ft.Container(height=10),
-            ft.ElevatedButton("Upload CSV File", 
-                            on_click=lambda e: logger.info("CSV upload button clicked")),
-            ft.Container(height=10),
-            ft.Text("Supported columns: filename, path, metadata...", 
+            ft.Text("Supported formats: .csv, .xlsx, .xls, .numbers", 
                    size=14, color=colors['secondary_text']),
+            ft.Container(height=10),
+            ft.ElevatedButton("Select File", 
+                            on_click=open_csv_file_picker),
             ft.Container(height=20),
-            ft.Text("CSV content will be parsed and displayed here...", 
-                   size=14, color=colors['secondary_text'])
-        ], alignment="center")
+            ft.Container(
+                content=csv_file_display,
+                height=400,  # Set a fixed height for the scrollable area
+                expand=True
+            ),
+            ft.Container(height=20),
+            ft.Text("Note: The selected column will be used for fuzzy search matching against available files.", 
+                   size=12, color=colors['secondary_text'])
+        ], alignment="center", scroll=ft.ScrollMode.AUTO)
     
     else:
         # Fallback for unknown options
