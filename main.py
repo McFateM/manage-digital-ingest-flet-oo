@@ -59,6 +59,52 @@ logger.addHandler(_file_handler)
 # Write an initial log entry
 logger.info("Logger initialized - writing to mdi.log and SnackBarHandler attached")
 
+# --- PERSISTENT STORAGE FUNCTIONS --------------------------------------------
+
+def load_last_directory():
+    """Load the last used directory from persistent storage"""
+    try:
+        config_path = os.path.join("_data", "persistent.json")
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                directory = data.get("last_directory")
+                if directory and os.path.exists(directory):
+                    logger.info(f"Loaded persistent last directory: {directory}")
+                    return directory
+                else:
+                    logger.info("Saved directory no longer exists or is invalid")
+        else:
+            logger.info("No persistent configuration found")
+    except Exception as e:
+        logger.warning(f"Failed to load last directory: {e}")
+    return None
+
+def save_last_directory(directory):
+    """Save the last used directory to persistent storage"""
+    try:
+        config_path = os.path.join("_data", "persistent.json")
+        # Ensure the _data directory exists
+        os.makedirs("_data", exist_ok=True)
+        
+        # Load existing data to preserve other persistent settings
+        existing_data = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    existing_data = json.load(f)
+            except Exception:
+                logger.warning("Failed to read existing persistent data, creating new file")
+        
+        # Update only the last_directory field
+        existing_data["last_directory"] = directory
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(existing_data, f, indent=2)
+        logger.info(f"Saved persistent last directory: {directory}")
+    except Exception as e:
+        logger.error(f"Failed to save last directory: {e}")
+
 # --- UNIVERSAL FUNCTIONS ------------------------------------------------------
 
 # -------------------------------------------------------------------------------
@@ -489,7 +535,7 @@ def settings_view(page):
         storage_settings_container,
         collection_settings_container,
         ft.Divider(height=20, color=colors['divider'])
-    ], alignment="center", scroll=ft.ScrollMode.AUTO, expand=True)
+    ], alignment="center")
 
 # -------------------------------------------------------------------------------
 # file_selector_view()
@@ -509,7 +555,7 @@ def file_selector_view(page):
     
     # Default content if no option is selected
     if not current_file_option:
-        return ft.Column([
+        default_column = ft.Column([
             ft.Text("File Selector Page", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(height=20),
             ft.Text("Please select a file option in Settings first.", 
@@ -517,6 +563,8 @@ def file_selector_view(page):
             ft.ElevatedButton("Go to Settings", 
                             on_click=lambda e: page.go("/settings"))
         ], alignment="center")
+        
+        return default_column
     
     # Different execution paths based on selected option
     if current_file_option == "FilePicker":
@@ -622,6 +670,7 @@ def file_selector_view(page):
                 if file_paths:
                     last_directory = os.path.dirname(file_paths[0])
                     page.session.set("last_file_directory", last_directory)
+                    save_last_directory(last_directory)  # Save persistently
                     logger.info(f"Stored last directory: {last_directory}")
                 
                 # Copy files to temporary directory with sanitized names
@@ -639,8 +688,14 @@ def file_selector_view(page):
         page.overlay.append(file_picker)
         
         def open_file_picker(e):
-            # Get the last used directory from session
+            # Get the last used directory from session, or load from persistent storage
             last_directory = page.session.get("last_file_directory")
+            
+            # If not in session, try to load from persistent storage
+            if not last_directory:
+                last_directory = load_last_directory()
+                if last_directory:
+                    page.session.set("last_file_directory", last_directory)
             
             if last_directory and os.path.exists(last_directory):
                 logger.info(f"Using last directory as initial path: {last_directory}")
@@ -712,40 +767,99 @@ def file_selector_view(page):
                        size=14, color=colors['secondary_text'])
             )
         
-        return ft.Column([
+        # Create collapsible sections for FilePicker
+        file_picker_section = ft.ExpansionTile(
+            title=ft.Text("File Selection", weight=ft.FontWeight.BOLD),
+            subtitle=ft.Text("Choose image and PDF files from your system"),
+            leading=ft.Icon(ft.Icons.FOLDER_OPEN),
+            initially_expanded=len(selected_files) == 0,
+            controls=[
+                ft.Column([
+                    ft.Text("Select image and PDF files from your local file system", 
+                           size=16, color=colors['primary_text']),
+                    ft.Text("Files are automatically copied to a temporary directory with space-free names", 
+                           size=14, color=colors['secondary_text']),
+                    ft.Container(height=10),
+                    ft.ElevatedButton("Open File Picker", 
+                                    on_click=open_file_picker),
+                ], spacing=10)
+            ]
+        )
+        
+        selected_files_section = None
+        if selected_files:
+            selected_files_section = ft.ExpansionTile(
+                title=ft.Text("Selected Files", weight=ft.FontWeight.BOLD),
+                subtitle=ft.Text(f"{len(selected_files)} files selected"),
+                leading=ft.Icon(ft.Icons.CHECK_CIRCLE),
+                initially_expanded=True,
+                controls=[
+                    ft.Column(file_list_controls, spacing=5)
+                ]
+            )
+        
+        # Create the main column
+        main_column_controls = [
             ft.Text("File Selector - FilePicker", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(height=20),
-            ft.Text("Select image and PDF files from your local file system", 
-                   size=16, color=colors['primary_text']),
-            ft.Text("Files are automatically copied to a temporary directory with space-free names", 
-                   size=14, color=colors['secondary_text']),
-            ft.Container(height=10),
-            ft.ElevatedButton("Open File Picker", 
-                            on_click=open_file_picker),
-            ft.Container(height=20),
-            *file_list_controls
-        ], alignment="center")
+            file_picker_section,
+        ]
+        
+        if selected_files_section:
+            main_column_controls.append(selected_files_section)
+        
+        main_column = ft.Column(main_column_controls, alignment="center")
+        
+        return main_column
     
     elif current_file_option == "Google Sheet":
         logger.info("Executing Google Sheet path")
-        return ft.Column([
+        
+        # Create collapsible sections for Google Sheet
+        sheet_connection_section = ft.ExpansionTile(
+            title=ft.Text("Sheet Connection", weight=ft.FontWeight.BOLD),
+            subtitle=ft.Text("Connect to your Google Sheet"),
+            leading=ft.Icon(ft.Icons.CLOUD),
+            initially_expanded=True,
+            controls=[
+                ft.Column([
+                    ft.Text("Import file list from a Google Sheet", 
+                           size=16, color=colors['primary_text']),
+                    ft.Container(height=10),
+                    ft.TextField(
+                        label="Google Sheet URL",
+                        hint_text="https://docs.google.com/spreadsheets/d/...",
+                        width=400
+                    ),
+                    ft.Container(height=10),
+                    ft.ElevatedButton("Connect to Google Sheet", 
+                                    on_click=lambda e: logger.info("Google Sheet connection button clicked")),
+                ], spacing=10)
+            ]
+        )
+        
+        sheet_data_section = ft.ExpansionTile(
+            title=ft.Text("Sheet Data", weight=ft.FontWeight.BOLD),
+            subtitle=ft.Text("Preview and select data from your sheet"),
+            leading=ft.Icon(ft.Icons.TABLE_CHART),
+            initially_expanded=False,
+            controls=[
+                ft.Column([
+                    ft.Text("Sheet data will be displayed here...", 
+                           size=14, color=colors['secondary_text'])
+                ], spacing=10)
+            ]
+        )
+        
+        # Create the main column
+        google_sheet_column = ft.Column([
             ft.Text("File Selector - Google Sheet", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(height=20),
-            ft.Text("Import file list from a Google Sheet", 
-                   size=16, color=colors['primary_text']),
-            ft.Container(height=10),
-            ft.TextField(
-                label="Google Sheet URL",
-                hint_text="https://docs.google.com/spreadsheets/d/...",
-                width=400
-            ),
-            ft.Container(height=10),
-            ft.ElevatedButton("Connect to Google Sheet", 
-                            on_click=lambda e: logger.info("Google Sheet connection button clicked")),
-            ft.Container(height=20),
-            ft.Text("Sheet data will be displayed here...", 
-                   size=14, color=colors['secondary_text'])
+            sheet_connection_section,
+            sheet_data_section
         ], alignment="center")
+        
+        return google_sheet_column
     
     elif current_file_option == "CSV":
         logger.info("Executing CSV path")
@@ -800,6 +914,7 @@ def file_selector_view(page):
                 # Store the directory for future FilePicker operations
                 last_directory = os.path.dirname(file_path)
                 page.session.set("last_file_directory", last_directory)
+                save_last_directory(last_directory)  # Save persistently
                 logger.info(f"Stored last directory: {last_directory}")
                 
                 # Read the file and get columns
@@ -851,8 +966,14 @@ def file_selector_view(page):
         page.overlay.append(csv_file_picker)
         
         def open_csv_file_picker(e):
-            # Get the last used directory from session
+            # Get the last used directory from session, or load from persistent storage
             last_directory = page.session.get("last_file_directory")
+            
+            # If not in session, try to load from persistent storage
+            if not last_directory:
+                last_directory = load_last_directory()
+                if last_directory:
+                    page.session.set("last_file_directory", last_directory)
             
             if last_directory and os.path.exists(last_directory):
                 logger.info(f"Using last directory as initial path for CSV picker: {last_directory}")
@@ -938,8 +1059,13 @@ def file_selector_view(page):
             # Update display to show selection status
             update_csv_display()
         
-        # Build the CSV file display as a reference we can update
-        csv_file_display = ft.Column([], spacing=10, scroll=ft.ScrollMode.AUTO)
+        # Build collapsible containers for different stages
+        file_selection_container = ft.Container(visible=True)
+        columns_display_container = ft.Container(visible=False)
+        results_display_container = ft.Container(visible=False)
+        
+        # Build the CSV file display as a reference we can update (no nested scroll)
+        csv_file_display = ft.Column([], spacing=10)
         
         def update_csv_display():
             """Update the CSV file display with current session data"""
@@ -953,49 +1079,64 @@ def file_selector_view(page):
             logger.info(f"update_csv_display - columns: {current_csv_columns}")
             logger.info(f"update_csv_display - error: {current_csv_error}")
             
+            # Update container visibility based on state
+            file_selection_container.visible = True
+            columns_display_container.visible = bool(current_csv_file and (current_csv_columns or current_csv_error))
+            results_display_container.visible = bool(current_selected_column)
+            
             # Clear current display
             csv_file_display.controls.clear()
             
+            # File Selection Section
+            file_selection_content = ft.Column([
+                ft.Text("Step 1: Select CSV File", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                ft.ElevatedButton("Select File", on_click=open_csv_file_picker),
+            ], spacing=10)
+            
             if current_csv_file:
                 filename = os.path.basename(current_csv_file)
-                csv_file_display.controls.extend([
-                    ft.Text("Selected file:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                    ft.Text(f"📄 {filename}", size=14, color=colors['secondary_text']),
+                file_selection_content.controls.extend([
+                    ft.Container(height=5),
+                    ft.Text(f"✅ Selected: {filename}", size=14, color=colors['primary_text']),
                     ft.Text(f"Path: {current_csv_file}", size=12, color=colors['secondary_text']),
-                    ft.Container(height=10),
                     ft.Row([
-                        ft.ElevatedButton("Clear Selection", on_click=on_clear_csv_selection),
-                        ft.ElevatedButton("Reload File", on_click=lambda e: reload_csv_file())
-                    ], alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Divider(height=20, color=colors['divider'])
+                        ft.ElevatedButton("Clear Selection", on_click=on_clear_csv_selection, scale=0.8),
+                        ft.ElevatedButton("Reload File", on_click=lambda e: reload_csv_file(), scale=0.8)
+                    ], alignment=ft.MainAxisAlignment.CENTER)
                 ])
+            
+            file_selection_container.content = ft.ExpansionTile(
+                title=ft.Text("File Selection", weight=ft.FontWeight.BOLD),
+                subtitle=ft.Text("Choose your CSV/Excel file"),
+                leading=ft.Icon(ft.Icons.FILE_UPLOAD),
+                initially_expanded=not bool(current_csv_file),
+                controls=[file_selection_content]
+            )
+            
+            # Columns Display Section
+            if current_csv_file:
+                columns_content = ft.Column([], spacing=10)
                 
-                # Check for read errors
                 if current_csv_error:
-                    logger.info("update_csv_display - Showing error message")
-                    csv_file_display.controls.extend([
+                    columns_content.controls.extend([
                         ft.Text("❌ Error reading file:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                        ft.Text(current_csv_error, size=12, color=colors['secondary_text']),
-                        ft.Divider(height=10, color=colors['divider'])
+                        ft.Text(current_csv_error, size=12, color=colors['secondary_text'])
                     ])
-                
-                # Display columns if available
                 elif current_csv_columns and len(current_csv_columns) > 0:
-                    logger.info("update_csv_display - Showing columns")
-                    csv_file_display.controls.extend([
-                        ft.Text(f"Found {len(current_csv_columns)} columns:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                    columns_content.controls.extend([
+                        ft.Text("Step 2: Select Column", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Text(f"Found {len(current_csv_columns)} columns:", size=14, color=colors['primary_text']),
                         ft.Container(height=5)
                     ])
                     
                     # Show column names in a more compact format if there are many columns
                     if len(current_csv_columns) > 10:
-                        # For many columns, show them in a compact scrollable list
                         column_list = ft.Column([
                             ft.Text(f"{i}. {col}", size=12, color=colors['secondary_text'])
                             for i, col in enumerate(current_csv_columns, 1)
                         ], spacing=2, scroll=ft.ScrollMode.AUTO, height=150)
                         
-                        csv_file_display.controls.append(
+                        columns_content.controls.append(
                             ft.Container(
                                 content=column_list,
                                 border=ft.border.all(1, colors['secondary_text']),
@@ -1004,13 +1145,12 @@ def file_selector_view(page):
                             )
                         )
                     else:
-                        # For fewer columns, show them normally
                         for i, col in enumerate(current_csv_columns, 1):
-                            csv_file_display.controls.append(
+                            columns_content.controls.append(
                                 ft.Text(f"{i}. {col}", size=12, color=colors['secondary_text'])
                             )
                     
-                    csv_file_display.controls.extend([
+                    columns_content.controls.extend([
                         ft.Container(height=15),
                         ft.Text("Select column containing filenames:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                         ft.Dropdown(
@@ -1019,99 +1159,99 @@ def file_selector_view(page):
                             options=[ft.dropdown.Option(col) for col in current_csv_columns],
                             on_change=on_column_selection_change,
                             width=300
-                        ),
-                        ft.Container(height=10)
+                        )
+                    ])
+                else:
+                    columns_content.controls.extend([
+                        ft.Text("⚠️ No columns detected in file", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Text("The file might be empty or in an unsupported format.", size=12, color=colors['secondary_text'])
+                    ])
+                
+                columns_display_container.content = ft.ExpansionTile(
+                    title=ft.Text("Column Selection", weight=ft.FontWeight.BOLD),
+                    subtitle=ft.Text("Choose the column containing filenames"),
+                    leading=ft.Icon(ft.Icons.VIEW_COLUMN),
+                    initially_expanded=bool(current_csv_columns and not current_selected_column),
+                    controls=[columns_content]
+                )
+            
+            # Results Display Section
+            if current_selected_column:
+                selected_files = page.session.get("selected_files")
+                if selected_files is None:
+                    selected_files = []
+                file_count = len(selected_files) if selected_files else 0
+                
+                results_content = ft.Column([
+                    ft.Text("Step 3: Processing Results", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                    ft.Text(f"✅ Selected column: {current_selected_column}", size=14, color=colors['primary_text']),
+                    ft.Text(f"📁 Extracted {file_count} filenames from this column", size=12, color=colors['secondary_text']),
+                    ft.Text("These filenames will be used for fuzzy matching and processing.", size=12, color=colors['secondary_text'])
+                ], spacing=10)
+                
+                # Show the extracted filenames if available
+                if selected_files and len(selected_files) > 0:
+                    results_content.controls.extend([
+                        ft.Container(height=10),
+                        ft.Text("Extracted filenames:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
                     ])
                     
-                    # Show selection status
-                    if current_selected_column:
-                        # Get the current selected_files
-                        selected_files = page.session.get("selected_files")
-                        if selected_files is None:
-                            selected_files = []
-                        file_count = len(selected_files) if selected_files else 0
-                        
-                        csv_file_display.controls.extend([
-                            ft.Text(f"✅ Selected column: {current_selected_column}", 
-                                   size=14, color=colors['primary_text']),
-                            ft.Text(f"📁 Extracted {file_count} filenames from this column", 
-                                   size=12, color=colors['secondary_text']),
-                            ft.Text("These filenames will be used for fuzzy matching and processing.", 
-                                   size=12, color=colors['secondary_text'])
-                        ])
-                        
-                        # Show the extracted filenames if available
-                        if selected_files and len(selected_files) > 0:
-                            csv_file_display.controls.extend([
-                                ft.Container(height=10),
-                                ft.Text("Extracted filenames:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
-                            ])
-                            
-                            # Show filenames in a scrollable container
-                            filename_list = ft.Column([
-                                ft.Text(f"{i+1}. {filename}", size=11, color=colors['secondary_text'])
-                                for i, filename in enumerate(selected_files)
-                            ], spacing=2, scroll=ft.ScrollMode.AUTO, height=min(200, len(selected_files) * 20 + 20))
-                            
-                            csv_file_display.controls.append(
-                                ft.Container(
-                                    content=filename_list,
-                                    border=ft.border.all(1, colors['secondary_text']),
-                                    border_radius=5,
-                                    padding=10,
-                                    margin=ft.margin.symmetric(vertical=5)
-                                )
-                            )
-                    else:
-                        csv_file_display.controls.append(
-                            ft.Text("⚠️ Please select a column to continue with file processing.", 
-                                   size=12, color=colors['secondary_text'])
+                    filename_list = ft.Column([
+                        ft.Text(f"{i+1}. {filename}", size=11, color=colors['secondary_text'])
+                        for i, filename in enumerate(selected_files)
+                    ], spacing=2, scroll=ft.ScrollMode.AUTO, height=min(200, len(selected_files) * 20 + 20))
+                    
+                    results_content.controls.append(
+                        ft.Container(
+                            content=filename_list,
+                            border=ft.border.all(1, colors['secondary_text']),
+                            border_radius=5,
+                            padding=10,
+                            margin=ft.margin.symmetric(vertical=5)
                         )
-                else:
-                    # No columns found and no error
-                    logger.info("update_csv_display - No columns and no error")
-                    csv_file_display.controls.extend([
-                        ft.Text("⚠️ No columns detected in file", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                        ft.Text("The file might be empty or in an unsupported format.", size=12, color=colors['secondary_text']),
-                        ft.Container(height=10)
-                    ])
-            else:
-                logger.info("update_csv_display - No file selected")
-                csv_file_display.controls.append(
-                    ft.Text("No file selected yet...", 
-                           size=14, color=colors['secondary_text'])
+                    )
+                
+                results_display_container.content = ft.ExpansionTile(
+                    title=ft.Text("Processing Results", weight=ft.FontWeight.BOLD),
+                    subtitle=ft.Text(f"{file_count} filenames extracted"),
+                    leading=ft.Icon(ft.Icons.CHECK_CIRCLE),
+                    initially_expanded=True,
+                    controls=[results_content]
                 )
+            
+            # Add all containers to the display
+            csv_file_display.controls.extend([
+                file_selection_container,
+                columns_display_container,
+                results_display_container
+            ])
             
             page.update()
         
         # Initialize the display
         update_csv_display()
         
-        return ft.Column([
+        # Create the main CSV column
+        csv_main_column = ft.Column([
             ft.Text("File Selector - CSV", size=24, weight=ft.FontWeight.BOLD),
             ft.Divider(height=20, color=colors['divider']),
-            ft.Text("Select a CSV, Excel, or Numbers file for processing", 
+            ft.Text("Process CSV, Excel, or Numbers files step by step", 
                    size=16, color=colors['primary_text']),
-            ft.Text("Supported formats: .csv, .xlsx, .xls, .numbers", 
+            ft.Text("Follow the collapsible sections below to complete your file selection", 
                    size=14, color=colors['secondary_text']),
             ft.Container(height=10),
-            ft.ElevatedButton("Select File", 
-                            on_click=open_csv_file_picker),
-            ft.Divider(height=20, color=colors['divider']),
-            ft.Container(
-                content=csv_file_display,
-                height=400,  # Set a fixed height for the scrollable area
-                expand=True
-            ),
-            ft.Divider(height=20, color=colors['divider']),
+            csv_file_display,
+            ft.Container(height=10),
             ft.Text("Note: The selected column will be used for fuzzy search matching against available files.", 
                    size=12, color=colors['secondary_text'])
-        ], alignment="center", scroll=ft.ScrollMode.AUTO)
+        ], alignment="center")
+        
+        return csv_main_column
     
     else:
         # Fallback for unknown options
         logger.warning(f"Unknown file selector option: {current_file_option}")
-        return ft.Column([
+        fallback_column = ft.Column([
             ft.Text("File Selector Page", size=24, weight=ft.FontWeight.BOLD),
             ft.Container(height=20),
             ft.Text(f"Unknown option: {current_file_option}", 
@@ -1119,6 +1259,8 @@ def file_selector_view(page):
             ft.ElevatedButton("Go to Settings", 
                             on_click=lambda e: page.go("/settings"))
         ], alignment="center")
+        
+        return fallback_column
 
 # -------------------------------------------------------------------------------
 # derivatives_view()
@@ -1504,7 +1646,7 @@ def derivatives_view(page):
             expand=True
         )
         
-    ], alignment="center", scroll=ft.ScrollMode.AUTO, expand=True)
+    ], alignment="center")
 
 # -------------------------------------------------------------------------------
 # storage_view()
@@ -1585,12 +1727,21 @@ def main(page: ft.Page):
     
     # Set default theme mode to Light
     page.theme_mode = ft.ThemeMode.LIGHT
+    
+    # Enable page-level scrolling
+    page.scroll = ft.ScrollMode.AUTO
 
     # Initialize a default SnackBar so the SnackBarHandler has a target
     page.snack_bar = ft.SnackBar(content=ft.Text(""))
 
     # Store the logger in the page session for other modules to use
     page.session.set("logger", logger)
+    
+    # Load persistent last directory on app startup
+    persistent_directory = load_last_directory()
+    if persistent_directory:
+        page.session.set("last_file_directory", persistent_directory)
+        logger.info(f"Initialized session with persistent last directory: {persistent_directory}")
 
     # Also give the snack handler the page reference
     _snack_handler.set_page(page)
