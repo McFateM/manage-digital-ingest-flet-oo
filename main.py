@@ -541,81 +541,6 @@ def settings_view(page):
         ft.Divider(height=20, color=colors['divider'])
     ], alignment="center")
 
-# Helper function to add log entries
-def add_log_entry(page, message, color=None):
-    """Add a new entry to the search log"""
-    search_log = page.session.get("_search_log")
-    if search_log and message:
-        colors = get_theme_colors(page)
-        search_log.controls.append(
-            ft.Text(
-                message,
-                size=12,
-                color=color or colors['secondary_text'],
-                no_wrap=True,
-            )
-        )
-        search_log.update()
-
-# Helper function to create search UI elements
-def create_search_ui_elements(page, colors):
-    """Create and configure the search UI elements"""
-    # Store UI elements in session for access across functions
-    page.session.set("_search_ui_created", True)
-    
-    # Create and store the search log
-    search_log = ft.ListView(
-        controls=[],
-        height=200,
-        spacing=2,
-        key="search_log"
-    )
-    page.session.set("_search_log", search_log)
-    
-    # Create and store the cancel button
-    cancel_button = ft.ElevatedButton(
-        text="Cancel Search",
-        icon=ft.Icons.CANCEL,
-        bgcolor=ft.Colors.RED_600,
-        color="white",
-        visible=False,
-        key="cancel_button"
-    )
-    page.session.set("_cancel_button", cancel_button)
-    
-    # Create and store the container
-    log_container = ft.Container(
-        content=ft.Column([
-            ft.Text(
-                "Search Progress Log",
-                size=14,
-                weight=ft.FontWeight.BOLD,
-                color=colors['primary_text']
-            ),
-            ft.Container(
-                content=search_log,
-                border=ft.border.all(1, colors['border']),
-                border_radius=5,
-                padding=10,
-            ),
-            ft.Container(
-                content=cancel_button,
-                padding=ft.padding.symmetric(vertical=10),
-            ),
-        ]),
-        padding=ft.padding.all(10),
-        border=ft.border.all(1, colors['border']),
-        border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
-        bgcolor=colors['container_bg'],
-        visible=False,  # Start hidden
-        key="log_container",
-    )
-    page.session.set("_log_container", log_container)
-    
-    # Return references for immediate use
-    return log_container, search_log, cancel_button
-
 # -------------------------------------------------------------------------------
 # file_selector_view()
 # Purpose: Renders file selection interface with different paths for FilePicker, 
@@ -627,20 +552,16 @@ def file_selector_view(page):
     # Get theme-appropriate colors
     colors = get_theme_colors(page)
     
-    # Create search UI elements before building main column
-    if not page.session.get("_search_ui_created"):
-        create_search_ui_elements(page, colors)
-    
-    # Get UI elements from session
-    log_container = page.session.get("_log_container")
-    search_log = page.session.get("_search_log")
-    cancel_button = page.session.get("_cancel_button")
-    
-    if not all([log_container, search_log, cancel_button]):
-        logger.error("Failed to initialize search UI elements")
-        return ft.Column([
-            ft.Text("Error: Failed to initialize UI", color=colors['error'])
-        ])
+    # Create cancel button for search operations
+    cancel_button = ft.ElevatedButton(
+        text="Cancel Search",
+        icon=ft.Icons.CANCEL,
+        bgcolor=ft.Colors.RED_600,
+        color="white",
+        visible=False,
+        key="cancel_button"
+    )
+    page.session.set("_cancel_button", cancel_button)
     
     def do_fuzzy_search(page, colors):
         """Perform fuzzy search on selected files"""
@@ -673,47 +594,25 @@ def file_selector_view(page):
                 # Set up the cancel button
                 def on_cancel_click(e):
                     page.session.set("cancel_search", True)
-                    add_log_entry(page, "Search cancelled by user", color=colors['error'])
+                    logger.warning("Search cancelled by user")
                 
                 cancel_button.on_click = on_cancel_click
                 
-                # Show the container and button
-                log_container.visible = True
+                # Show the cancel button
                 cancel_button.visible = True
                 
-                # Add initial log entry
-                add_log_entry(page, f"Starting search in: {search_dir}")
-                add_log_entry(page, f"Files to process: {len(selected_files)}")
+                # Log initial search info
+                logger.info(f"Starting search in: {search_dir}")
+                logger.info(f"Files to process: {len(selected_files)}")
                 
                 page.update()
             else:
-                missing = []
-                if not log_container: missing.append("log_container")
-                if not search_log: missing.append("search_log")
-                if not cancel_button: missing.append("cancel_button")
-                logger.warning(f"Could not find UI elements: {', '.join(missing)}")
+                if not cancel_button:
+                    logger.warning("Could not find cancel button UI element")
         
         except Exception as e:
-            logger.error(f"Error setting up search UI: {str(e)}")
+            logger.error(f"Error setting up search: {str(e)}")
             return
-            
-        def add_log_entry(message, color=None):
-            """Add a new entry to the search log"""
-            try:
-                if search_log and message:
-                    search_log.controls.append(
-                        ft.Text(
-                            message,
-                            size=12,
-                            color=color or colors['secondary_text'],
-                            no_wrap=True,
-                        )
-                    )
-                    # Auto-scroll to bottom
-                    search_log.controls[-1].focus()
-                    page.update()
-            except Exception as e:
-                logger.error(f"Error adding log entry: {str(e)}")
         
         logger.info(f"Starting fuzzy search in {search_dir} for {len(selected_files)} files")
         
@@ -721,7 +620,7 @@ def file_selector_view(page):
             """Update progress in log view"""
             try:
                 files_done = int(progress * len(selected_files))
-                add_log_entry(page, f"Search Progress: {files_done}/{len(selected_files)} files processed ({progress:.0%})")
+                logger.info(f"Search Progress: {files_done}/{len(selected_files)} files processed ({progress:.0%})")
                 logger.info(f"Progress update: {files_done}/{len(selected_files)} files ({progress:.0%})")
             except Exception as e:
                 logger.error(f"Error updating progress: {str(e)}")
@@ -742,7 +641,7 @@ def file_selector_view(page):
             
             # If search was cancelled
             if results is None:
-                add_log_entry(page, "Search cancelled by user", color=colors['error'])
+                logger.warning("Search cancelled by user")
                 logger.info("Fuzzy search was cancelled by user")
                 cancel_button.visible = False
                 return
@@ -757,7 +656,7 @@ def file_selector_view(page):
             
             # Update log with final status and refresh
             matches_found = len([p for p in selected_paths if p != "No Match"])
-            add_log_entry(page, f"Search Complete: Found {matches_found} matches out of {len(selected_files)} files")
+            logger.info(f"Search Complete: Found {matches_found} matches out of {len(selected_files)} files")
             logger.info(f"Fuzzy search completed. Found {matches_found} matches")
             
             # Hide the cancel button and collapse results
@@ -773,7 +672,7 @@ def file_selector_view(page):
         except Exception as e:
             error_msg = f"Error during search: {str(e)}"
             logger.error(f"Error during fuzzy search: {str(e)}")
-            add_log_entry(page, error_msg, color=colors['error'])
+            logger.error(error_msg)
             
             # Show error in snackbar
             page.snack_bar = ft.SnackBar(content=ft.Text(error_msg))
