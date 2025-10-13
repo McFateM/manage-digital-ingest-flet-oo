@@ -296,9 +296,6 @@ def settings_view(page):
     current_storage = page.session.get("selected_storage")
     current_collection = page.session.get("selected_collection")
     
-    # Ensure CB Collection is disabled when mode is not CollectionBuilder
-    is_collection_enabled = current_mode == "CollectionBuilder"
-    
     if current_mode:
         logger.info(f"Current mode selection: {current_mode}")
     if current_file_option:
@@ -308,15 +305,52 @@ def settings_view(page):
     if current_collection:
         logger.info(f"Current collection selection: {current_collection}")
     
+    # Calculate collection enabled state
+    is_collection_enabled = current_mode == "CollectionBuilder"
     logger.info(f"CB Collection Selector enabled: {is_collection_enabled}")
+    
+    # Create the collection dropdown reference
+    collection_dropdown = ft.Dropdown(
+        label="Select Collection",
+        value=current_collection,
+        options=[ft.dropdown.Option(collection) for collection in cb_collection_options],
+        width=300,
+        disabled=not is_collection_enabled
+    )
+    
+    # Create the collection container reference
+    collection_settings_container = ft.Container(
+        content=ft.Column([
+            ft.Text("CB Collection Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+            collection_dropdown
+        ]),
+        padding=ft.padding.all(10),
+        border=ft.border.all(1, colors['border']),
+        border_radius=10,
+        margin=ft.margin.symmetric(vertical=5),
+        bgcolor=colors['container_bg'],
+        opacity=1.0 if is_collection_enabled else 0.5
+    )
     
     # Dropdown change handlers
     def on_mode_change(e):
         page.session.set("selected_mode", e.control.value)
         logger.info(f"Mode selected: {e.control.value}")
         log_all_current_selections()
-        # Refresh the page to update container states
-        page.go("/settings")
+        
+        # Update collection selector state based on new mode
+        new_is_enabled = e.control.value == "CollectionBuilder"
+        collection_dropdown.disabled = not new_is_enabled
+        collection_settings_container.opacity = 1.0 if new_is_enabled else 0.5
+        page.update()
+    
+    def on_collection_change(e):
+        page.session.set("selected_collection", e.control.value)
+        logger.info(f"Collection selected: {e.control.value}")
+        log_all_current_selections()
+    
+    # Set the collection dropdown's change handler
+    collection_dropdown.on_change = on_collection_change
     
     def on_file_selector_change(e):
         page.session.set("selected_file_option", e.control.value)
@@ -326,11 +360,6 @@ def settings_view(page):
     def on_storage_change(e):
         page.session.set("selected_storage", e.control.value)
         logger.info(f"Storage selected: {e.control.value}")
-        log_all_current_selections()
-    
-    def on_collection_change(e):
-        page.session.set("selected_collection", e.control.value)
-        logger.info(f"Collection selected: {e.control.value}")
         log_all_current_selections()
     
     def log_all_current_selections():
@@ -440,26 +469,6 @@ def settings_view(page):
         border=ft.border.all(1, colors['border']),
         border_radius=10,
         margin=ft.margin.symmetric(vertical=5),
-        bgcolor=colors['container_bg']
-    )
-    
-    collection_settings_container = ft.Container(
-        content=ft.Column([
-            ft.Text("CB Collection Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-            ft.Dropdown(
-                label="Select Collection",
-                value=current_collection,
-                options=[ft.dropdown.Option(collection) for collection in cb_collection_options],
-                on_change=on_collection_change,
-                width=300,
-                disabled=not is_collection_enabled
-            )
-        ]),
-        padding=ft.padding.all(10),
-        border=ft.border.all(1, colors['border']),
-        border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
-        disabled=not is_collection_enabled,
         bgcolor=colors['container_bg']
     )
     
