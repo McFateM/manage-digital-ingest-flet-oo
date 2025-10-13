@@ -3,24 +3,55 @@ import os
 import utils
 from thumbnail import generate_thumbnail
 from subprocess import call
-from thefuzz import fuzz
 # from azure.identity import DefaultAzureCredential
 # from azure.storage.blob import BlobServiceClient
 import json
 import sys
 import logging
 
-# Fuzzy search functions
+# Simple string matching functions
 # ----------------------------------------------------------------------
+def calculate_string_similarity(str1, str2):
+    """
+    Calculate similarity between two strings using a simple approach.
+    Returns a percentage (0-100) of how similar the strings are.
+    """
+    if str1 == str2:
+        return 100
+    
+    # Simple substring matching approach
+    if str1 in str2 or str2 in str1:
+        # Calculate ratio based on length overlap
+        overlap = min(len(str1), len(str2))
+        total = max(len(str1), len(str2))
+        return int((overlap / total) * 100)
+    
+    # Count common characters
+    common_chars = 0
+    str1_chars = list(str1)
+    str2_chars = list(str2)
+    
+    for char in str1_chars:
+        if char in str2_chars:
+            common_chars += 1
+            str2_chars.remove(char)
+    
+    # Calculate similarity based on common characters
+    total_chars = max(len(str1), len(str2))
+    if total_chars == 0:
+        return 0
+    
+    return int((common_chars / total_chars) * 100)
+
 def perform_fuzzy_search(base_path, target_filename, threshold=90):
     """
     Recursively search for files in base_path and find the best match for target_filename
-    using fuzzy string matching with a given threshold.
+    using simple string matching.
     
     Args:
         base_path (str): The directory to start searching from
         target_filename (str): The filename to match against
-        threshold (int): The minimum fuzzy match ratio to consider a match (0-100)
+        threshold (int): The minimum match percentage to consider a match (0-100)
         
     Returns:
         tuple: (best_match_path, best_match_ratio) or (None, 0) if no match found
@@ -31,8 +62,8 @@ def perform_fuzzy_search(base_path, target_filename, threshold=90):
         
         for root, dirs, files in os.walk(base_path):
             for filename in files:
-                # Calculate fuzzy match ratio between the current filename and target
-                ratio = fuzz.ratio(filename.lower(), target_filename.lower())
+                # Calculate simple string similarity ratio
+                ratio = calculate_string_similarity(filename.lower(), target_filename.lower())
                 
                 # Update best match if this ratio is higher
                 if ratio > best_match_ratio:

@@ -12,12 +12,10 @@ from thumbnail import generate_thumbnail
 # Optional imports for CSV processing
 try:
     import pandas as pd
-    from thefuzz import fuzz
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
     pd = None
-    fuzz = None
 
 # Simple thumbnail generation function to replace missing thumbnail module
 def generate_pdf_thumbnail(input_path, output_path, options):

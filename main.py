@@ -12,12 +12,10 @@ from thumbnail import generate_thumbnail
 # Optional imports for CSV processing
 try:
     import pandas as pd
-    from thefuzz import fuzz
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
     pd = None
-    fuzz = None
 
 # Simple thumbnail generation function to replace missing thumbnail module
 def generate_pdf_thumbnail(input_path, output_path, options):
@@ -317,6 +315,99 @@ def exit_view(page):
     ], alignment="center")
 
 # -------------------------------------------------------------------------------
+# show_log_view()
+# Purpose: Renders the search log page with progress display and cancel functionality
+# Parameters: page - Flet page object for session management and theme handling
+# Returns: ft.Column containing search log interface with cancel button
+# -------------------------------------------------------------------------------
+def show_log_view(page):
+    logger.info("Loaded Show Log page")
+    
+    # Get theme-appropriate colors
+    colors = get_theme_colors(page)
+    
+    # Create search UI elements if they don't exist
+    if not page.session.get("_search_ui_created"):
+        create_search_ui_elements(page, colors)
+    
+    # Get the search UI elements from session
+    log_container = page.session.get("_log_container")
+    search_log = page.session.get("_search_log")
+    cancel_button = page.session.get("_cancel_button")
+    
+    # Ensure the log container is visible
+    if log_container:
+        log_container.visible = True
+    
+    # Get current search state information
+    selected_files = page.session.get("selected_files") or []
+    search_directory = page.session.get("search_directory")
+    search_in_progress = page.session.get("cancel_search") is not None
+    
+    # Create status information
+    status_info = [
+        ft.Text("Search Log & Progress", size=24, weight=ft.FontWeight.BOLD),
+        ft.Divider(height=20, color=colors['divider']),
+    ]
+    
+    # Add current status information
+    if selected_files:
+        status_info.append(
+            ft.Text(f"📁 Files to search: {len(selected_files)}", 
+                   size=16, color=colors['primary_text'])
+        )
+    
+    if search_directory:
+        status_info.append(
+            ft.Text(f"🔍 Search directory: {search_directory}", 
+                   size=14, color=colors['secondary_text'])
+        )
+    
+    if search_in_progress:
+        status_info.append(
+            ft.Text("⏳ Search in progress...", 
+                   size=14, color=colors['primary_text'], weight=ft.FontWeight.BOLD)
+        )
+    
+    # Create the main column
+    main_column = ft.Column([
+        ft.Column(status_info, spacing=10),
+        ft.Container(height=20),
+        
+        # Instructions
+        ft.Container(
+            content=ft.Column([
+                ft.Text("Search Progress & Control", 
+                       size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                ft.Text("• View real-time search progress and logs", 
+                       size=14, color=colors['container_text']),
+                ft.Text("• Cancel ongoing searches using the button below", 
+                       size=14, color=colors['container_text']),
+                ft.Text("• Monitor file matching results and completion status", 
+                       size=14, color=colors['container_text']),
+            ], spacing=5),
+            padding=ft.padding.all(15),
+            border=ft.border.all(1, colors['border']),
+            border_radius=10,
+            bgcolor=colors['container_bg'],
+            margin=ft.margin.symmetric(vertical=10)
+        ),
+        
+        # Search log container (this is where the progress and cancel button appear)
+        log_container if log_container else ft.Container(
+            content=ft.Text("Search UI not initialized. Please select files and start a search first.", 
+                          size=14, color=colors['secondary_text']),
+            padding=ft.padding.all(20),
+            border=ft.border.all(1, colors['border']),
+            border_radius=10,
+            bgcolor=colors['container_bg']
+        ),
+        
+    ], alignment=ft.MainAxisAlignment.START, expand=True)
+    
+    return main_column
+
+# -------------------------------------------------------------------------------
 # settings_view()
 # Purpose: Renders the settings page with configuration dropdowns and containers
 # Parameters: page - Flet page object for session management and theme handling
@@ -541,6 +632,65 @@ def settings_view(page):
         ft.Divider(height=20, color=colors['divider'])
     ], alignment="center")
 
+# Helper function to create search UI elements
+def create_search_ui_elements(page, colors):
+    """Create and configure the search UI elements"""
+    # Store UI elements in session for access across functions
+    page.session.set("_search_ui_created", True)
+    
+    # Create and store the search log
+    search_log = ft.ListView(
+        controls=[],
+        height=200,
+        spacing=2,
+        key="search_log"
+    )
+    page.session.set("_search_log", search_log)
+    
+    # Create and store the cancel button
+    cancel_button = ft.ElevatedButton(
+        text="Cancel Search",
+        icon=ft.Icons.CANCEL,
+        bgcolor=ft.Colors.RED_600,
+        color="white",
+        visible=False,
+        key="cancel_button"
+    )
+    page.session.set("_cancel_button", cancel_button)
+    
+    # Create and store the container
+    log_container = ft.Container(
+        content=ft.Column([
+            ft.Text(
+                "Search Progress Log",
+                size=14,
+                weight=ft.FontWeight.BOLD,
+                color=colors['primary_text']
+            ),
+            ft.Container(
+                content=search_log,
+                border=ft.border.all(1, colors['border']),
+                border_radius=5,
+                padding=10,
+            ),
+            ft.Container(
+                content=cancel_button,
+                padding=ft.padding.symmetric(vertical=10),
+            ),
+        ]),
+        padding=ft.padding.all(10),
+        border=ft.border.all(1, colors['border']),
+        border_radius=10,
+        margin=ft.margin.symmetric(vertical=5),
+        bgcolor=colors['container_bg'],
+        visible=False,  # Start hidden
+        key="log_container",
+    )
+    page.session.set("_log_container", log_container)
+    
+    # Return references for immediate use
+    return log_container, search_log, cancel_button
+
 # -------------------------------------------------------------------------------
 # file_selector_view()
 # Purpose: Renders file selection interface with different paths for FilePicker, 
@@ -552,16 +702,9 @@ def file_selector_view(page):
     # Get theme-appropriate colors
     colors = get_theme_colors(page)
     
-    # Create cancel button for search operations
-    cancel_button = ft.ElevatedButton(
-        text="Cancel Search",
-        icon=ft.Icons.CANCEL,
-        bgcolor=ft.Colors.RED_600,
-        color="white",
-        visible=False,
-        key="cancel_button"
-    )
-    page.session.set("_cancel_button", cancel_button)
+    # Create search UI elements if they don't exist
+    if not page.session.get("_search_ui_created"):
+        create_search_ui_elements(page, colors)
     
     def do_fuzzy_search(page, colors):
         """Perform fuzzy search on selected files"""
@@ -591,6 +734,9 @@ def file_selector_view(page):
                 # Clear previous log entries
                 search_log.controls.clear()
                 
+                # Show the log container and cancel button
+                log_container.visible = True
+                
                 # Set up the cancel button
                 def on_cancel_click(e):
                     page.session.set("cancel_search", True)
@@ -604,6 +750,9 @@ def file_selector_view(page):
                 # Log initial search info
                 logger.info(f"Starting search in: {search_dir}")
                 logger.info(f"Files to process: {len(selected_files)}")
+                
+                # Navigate to the Show Log page to display progress
+                page.go("/show_log")
                 
                 page.update()
             else:
@@ -795,53 +944,6 @@ def file_selector_view(page):
             page.session.set("temp_files", [])
             page.session.set("temp_file_info", [])
         
-        # Create the search progress log view first
-    log_view = ft.ListView(
-        controls=[],
-        height=200,
-        spacing=2,
-        key="search_log"
-    )
-    
-    # Create the cancel button
-    cancel_button = ft.ElevatedButton(
-        text="Cancel Search",
-        icon=ft.Icons.CANCEL,
-        bgcolor=ft.Colors.RED_600,
-        color="white",
-        visible=False,
-        key="cancel_button"
-    )
-    
-    # Create the log container that holds both
-    log_container = ft.Container(
-        content=ft.Column([
-            ft.Text(
-                "Search Progress Log",
-                size=14,
-                weight=ft.FontWeight.BOLD,
-                color=colors['primary_text']
-            ),
-            ft.Container(
-                content=log_view,
-                border=ft.border.all(1, colors['border']),
-                border_radius=5,
-                padding=10,
-            ),
-            ft.Container(
-                content=cancel_button,
-                padding=ft.padding.symmetric(vertical=10),
-            ),
-        ]),
-        padding=ft.padding.all(10),
-        border=ft.border.all(1, colors['border']),
-        border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
-        bgcolor=colors['container_bg'],
-        visible=False,  # Start hidden
-        key="log_container",
-    )
-    
     # FilePicker configuration for images and PDFs
     def on_file_picker_result(e: ft.FilePickerResultEvent):
         if e.files:
@@ -1024,44 +1126,8 @@ def file_selector_view(page):
                 ]
             )
         
-        # Create a scrolling log view for search progress
-        log_view = ft.Column([
-            ft.Text(
-                "Search Progress Log",
-                size=14,
-                weight=ft.FontWeight.BOLD,
-                color=colors['primary_text'],
-            ),
-            ft.Container(
-                content=ft.ListView(
-                    spacing=2,
-                    height=200,
-                    key="search_log",
-                ),
-                border=ft.border.all(1, colors['border']),
-                border_radius=5,
-                padding=10,
-            ),
-            ft.ElevatedButton(
-                text="Cancel Search",
-                icon=ft.Icons.CANCEL,
-                color="white",
-                bgcolor=colors['error'],
-                key="cancel_button",
-                visible=False,
-            ),
-        ], spacing=10)
-        
-        log_container = ft.Container(
-            content=log_view,
-            padding=ft.padding.all(10),
-            border=ft.border.all(1, colors['border']),
-            border_radius=10,
-            margin=ft.margin.symmetric(vertical=5),
-            bgcolor=colors['container_bg'],
-            visible=False,  # Start hidden
-            key="log_container"
-        )
+        # Get the log container from session (created by create_search_ui_elements)
+        session_log_container = page.session.get("_log_container")
 
         # Create the main column
         main_column = ft.Column([
@@ -1078,8 +1144,8 @@ def file_selector_view(page):
             # Divider before log container
             ft.Divider(height=20, color=colors['divider']),
             
-            # Search progress log container
-            log_container,
+            # Search progress log container (use session container)
+            session_log_container if session_log_container else ft.Container(),
             
         ], alignment=ft.MainAxisAlignment.CENTER)
         
@@ -1550,8 +1616,20 @@ def file_selector_view(page):
                                         text="Start Fuzzy Search",
                                         on_click=lambda e: do_fuzzy_search(page, colors),
                                         disabled=not bool(page.session.get("search_directory"))
-                                    ) if selected_files else ft.Container()
+                                    ) if selected_files else ft.Container(),
+                                    ft.ElevatedButton(
+                                        text="📊 Show Search Log",
+                                        on_click=lambda e: page.go("/show_log"),
+                                        bgcolor=colors.get('secondary_bg', ft.Colors.BLUE_50),
+                                        color=colors.get('secondary_text', ft.Colors.BLUE_800)
+                                    )
                                 ]),
+                                ft.Text(
+                                    "💡 Tip: Use 'Show Search Log' to monitor progress and cancel if needed", 
+                                    size=12,
+                                    color=colors['secondary_text'],
+                                    italic=True
+                                ),
                                 ft.Text(
                                     value=f"Search directory: {page.session.get('search_directory') or 'Not selected'}", 
                                     size=12,
@@ -2077,6 +2155,7 @@ VIEWS = {
     "/settings": settings_view,
     "/file_selector": file_selector_view,
     "/derivatives": derivatives_view,
+    "/show_log": show_log_view,
     "/storage": storage_view,
 }
 
@@ -2095,6 +2174,7 @@ def build_appbar(page):
             ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=lambda e: page.go("/settings")),
             ft.IconButton(ft.Icons.FILE_OPEN, tooltip="Select Files for Ingest", on_click=lambda e: page.go("/file_selector")),
             ft.IconButton(ft.Icons.PHOTO_SIZE_SELECT_LARGE_SHARP, tooltip="Create Derivatives from Selected Files", on_click=lambda e: page.go("/derivatives")),
+            ft.IconButton(ft.Icons.ARTICLE, tooltip="Show Search Log", on_click=lambda e: page.go("/show_log")),
             ft.IconButton(ft.Icons.STORAGE, tooltip="Engage Azure Storage", on_click=lambda e: page.go("/storage")),
             ft.IconButton(ft.Icons.EXIT_TO_APP, tooltip="Exit", on_click=lambda e: page.go("/exit"))
         ]
