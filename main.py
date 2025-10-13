@@ -326,34 +326,32 @@ def show_log_view(page):
     # Get theme-appropriate colors
     colors = get_theme_colors(page)
     
-    # Create search UI elements if they don't exist
-    if not page.session.get("_search_ui_created"):
-        create_search_ui_elements(page, colors)
-    
-    # Get the search UI elements from session
-    log_container = page.session.get("_log_container")
-    search_log = page.session.get("_search_log")
-    cancel_button = page.session.get("_cancel_button")
-    
-    # Ensure the log container is visible
-    if log_container:
-        log_container.visible = True
-    
     # Get current search state information
     selected_files = page.session.get("selected_files") or []
     search_directory = page.session.get("search_directory")
-    search_in_progress = page.session.get("cancel_search") is not None
+    search_in_progress = page.session.get("search_in_progress") or False
+    current_progress = page.session.get("search_progress") or 0.0
+    
+    # Read recent log entries
+    log_entries = read_recent_logs(100)  # Get last 100 log entries
+    
+    # Create log display controls
+    log_controls = []
+    for entry in log_entries:
+        entry = entry.strip()
+        if entry:
+            log_controls.append(ft.Text(entry, size=12, color=colors['primary_text']))
     
     # Create status information
     status_info = [
-        ft.Text("Search Log & Progress", size=24, weight=ft.FontWeight.BOLD),
+        ft.Text("Process Log & Progress", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(height=20, color=colors['divider']),
     ]
     
     # Add current status information
     if selected_files:
         status_info.append(
-            ft.Text(f"📁 Files to search: {len(selected_files)}", 
+            ft.Text(f"📁 Files to process: {len(selected_files)}", 
                    size=16, color=colors['primary_text'])
         )
     
@@ -365,27 +363,43 @@ def show_log_view(page):
     
     if search_in_progress:
         status_info.append(
-            ft.Text("⏳ Search in progress...", 
+            ft.Text("⏳ Process in progress...", 
                    size=14, color=colors['primary_text'], weight=ft.FontWeight.BOLD)
         )
+    
+    # Create progress bar
+    progress_bar = ft.ProgressBar(
+        value=current_progress,
+        width=400,
+        color=ft.Colors.BLUE,
+        bgcolor=colors['container_bg']
+    )
+    
+    # Create cancel button
+    cancel_button = ft.ElevatedButton(
+        text="Cancel Process",
+        icon=ft.Icons.CANCEL,
+        bgcolor=ft.Colors.RED_600,
+        color="white",
+        visible=search_in_progress,
+        on_click=lambda e: cancel_process(page)
+    )
     
     # Create the main column
     main_column = ft.Column([
         ft.Column(status_info, spacing=10),
         ft.Container(height=20),
         
-        # Instructions
+        # Progress section
         ft.Container(
             content=ft.Column([
-                ft.Text("Search Progress & Control", 
+                ft.Text("Process Progress", 
                        size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-                ft.Text("• View real-time search progress and logs", 
+                progress_bar,
+                ft.Text(f"Progress: {current_progress:.0%}" if current_progress > 0 else "Ready to start...", 
                        size=14, color=colors['container_text']),
-                ft.Text("• Cancel ongoing searches using the button below", 
-                       size=14, color=colors['container_text']),
-                ft.Text("• Monitor file matching results and completion status", 
-                       size=14, color=colors['container_text']),
-            ], spacing=5),
+                cancel_button,
+            ], spacing=10),
             padding=ft.padding.all(15),
             border=ft.border.all(1, colors['border']),
             border_radius=10,
@@ -393,19 +407,49 @@ def show_log_view(page):
             margin=ft.margin.symmetric(vertical=10)
         ),
         
-        # Search log container (this is where the progress and cancel button appear)
-        log_container if log_container else ft.Container(
-            content=ft.Text("Search UI not initialized. Please select files and start a search first.", 
-                          size=14, color=colors['secondary_text']),
-            padding=ft.padding.all(20),
+        # Log display section
+        ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("Application Logs", 
+                           size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                    ft.IconButton(
+                        icon=ft.Icons.REFRESH,
+                        tooltip="Refresh logs",
+                        on_click=lambda e: page.go("/show_log")  # Refresh the page to reload logs
+                    )
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Container(
+                    content=ft.Column(
+                        controls=log_controls,
+                        scroll=ft.ScrollMode.AUTO,
+                        spacing=2
+                    ) if log_controls else ft.Text("No log entries found", 
+                                                  size=14, color=colors['secondary_text']),
+                    height=300,
+                    border=ft.border.all(1, colors['border']),
+                    border_radius=5,
+                    padding=10,
+                    bgcolor=colors['markdown_bg']
+                )
+            ], spacing=10),
+            padding=ft.padding.all(15),
             border=ft.border.all(1, colors['border']),
             border_radius=10,
-            bgcolor=colors['container_bg']
+            bgcolor=colors['container_bg'],
+            margin=ft.margin.symmetric(vertical=10)
         ),
         
     ], alignment=ft.MainAxisAlignment.START, expand=True)
     
     return main_column
+
+def cancel_process(page):
+    """Cancel the current process"""
+    page.session.set("cancel_search", True)
+    page.session.set("search_in_progress", False)
+    logger.warning("Process cancelled by user")
+    page.go("/show_log")  # Refresh to update UI
 
 # -------------------------------------------------------------------------------
 # settings_view()
@@ -632,64 +676,16 @@ def settings_view(page):
         ft.Divider(height=20, color=colors['divider'])
     ], alignment="center")
 
-# Helper function to create search UI elements
-def create_search_ui_elements(page, colors):
-    """Create and configure the search UI elements"""
-    # Store UI elements in session for access across functions
-    page.session.set("_search_ui_created", True)
-    
-    # Create and store the search log
-    search_log = ft.ListView(
-        controls=[],
-        height=200,
-        spacing=2,
-        key="search_log"
-    )
-    page.session.set("_search_log", search_log)
-    
-    # Create and store the cancel button
-    cancel_button = ft.ElevatedButton(
-        text="Cancel Search",
-        icon=ft.Icons.CANCEL,
-        bgcolor=ft.Colors.RED_600,
-        color="white",
-        visible=False,
-        key="cancel_button"
-    )
-    page.session.set("_cancel_button", cancel_button)
-    
-    # Create and store the container
-    log_container = ft.Container(
-        content=ft.Column([
-            ft.Text(
-                "Search Progress Log",
-                size=14,
-                weight=ft.FontWeight.BOLD,
-                color=colors['primary_text']
-            ),
-            ft.Container(
-                content=search_log,
-                border=ft.border.all(1, colors['border']),
-                border_radius=5,
-                padding=10,
-            ),
-            ft.Container(
-                content=cancel_button,
-                padding=ft.padding.symmetric(vertical=10),
-            ),
-        ]),
-        padding=ft.padding.all(10),
-        border=ft.border.all(1, colors['border']),
-        border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
-        bgcolor=colors['container_bg'],
-        visible=False,  # Start hidden
-        key="log_container",
-    )
-    page.session.set("_log_container", log_container)
-    
-    # Return references for immediate use
-    return log_container, search_log, cancel_button
+# Helper function to read recent log entries
+def read_recent_logs(max_lines=50):
+    """Read the most recent log entries from mdi.log"""
+    try:
+        with open("mdi.log", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            # Return the last max_lines entries
+            return lines[-max_lines:] if len(lines) > max_lines else lines
+    except Exception as e:
+        return [f"Error reading log file: {str(e)}\n"]
 
 # -------------------------------------------------------------------------------
 # file_selector_view()
@@ -702,10 +698,6 @@ def file_selector_view(page):
     # Get theme-appropriate colors
     colors = get_theme_colors(page)
     
-    # Create search UI elements if they don't exist
-    if not page.session.get("_search_ui_created"):
-        create_search_ui_elements(page, colors)
-    
     def do_fuzzy_search(page, colors):
         """Perform fuzzy search on selected files"""
         search_dir = page.session.get("search_directory")
@@ -715,69 +707,34 @@ def file_selector_view(page):
             logger.error("Search directory or files not available")
             return
             
-        # Reset the cancel flag in session
+        # Reset search state
         page.session.set("cancel_search", False)
+        page.session.set("search_in_progress", True)
+        page.session.set("search_progress", 0.0)
         
-        # Get the UI elements from session
-        try:
-            # Check if UI elements have been created
-            if not page.session.get("_search_ui_created"):
-                logger.error("Search UI elements not initialized")
-                return
-                
-            # Get references from session
-            log_container = page.session.get("_log_container")
-            search_log = page.session.get("_search_log")
-            cancel_button = page.session.get("_cancel_button")
-            
-            if all([log_container, search_log, cancel_button]):
-                # Clear previous log entries
-                search_log.controls.clear()
-                
-                # Show the log container and cancel button
-                log_container.visible = True
-                
-                # Set up the cancel button
-                def on_cancel_click(e):
-                    page.session.set("cancel_search", True)
-                    logger.warning("Search cancelled by user")
-                
-                cancel_button.on_click = on_cancel_click
-                
-                # Show the cancel button
-                cancel_button.visible = True
-                
-                # Log initial search info
-                logger.info(f"Starting search in: {search_dir}")
-                logger.info(f"Files to process: {len(selected_files)}")
-                
-                # Navigate to the Show Log page to display progress
-                page.go("/show_log")
-                
-                page.update()
-            else:
-                if not cancel_button:
-                    logger.warning("Could not find cancel button UI element")
+        # Log initial search info
+        logger.info(f"Starting fuzzy search in: {search_dir}")
+        logger.info(f"Files to process: {len(selected_files)}")
         
-        except Exception as e:
-            logger.error(f"Error setting up search: {str(e)}")
-            return
-        
-        logger.info(f"Starting fuzzy search in {search_dir} for {len(selected_files)} files")
+        # Navigate to the Show Log page to display progress
+        page.go("/show_log")
+        page.update()
         
         def update_progress(progress):
-            """Update progress in log view"""
+            """Update progress in session and log"""
             try:
+                page.session.set("search_progress", progress)
                 files_done = int(progress * len(selected_files))
                 logger.info(f"Search Progress: {files_done}/{len(selected_files)} files processed ({progress:.0%})")
-                logger.info(f"Progress update: {files_done}/{len(selected_files)} files ({progress:.0%})")
+                # Force a page update to refresh the progress bar
+                if hasattr(page, 'update'):
+                    page.update()
             except Exception as e:
                 logger.error(f"Error updating progress: {str(e)}")
         
         def check_cancel():
             """Check if search should be cancelled"""
-            cancel = page.session.get("cancel_search")
-            return cancel if cancel is not None else False
+            return page.session.get("cancel_search") or False
         
         try:
             # Perform the fuzzy search with progress tracking and cancellation support
@@ -791,8 +748,8 @@ def file_selector_view(page):
             # If search was cancelled
             if results is None:
                 logger.warning("Search cancelled by user")
-                logger.info("Fuzzy search was cancelled by user")
-                cancel_button.visible = False
+                page.session.set("search_in_progress", False)
+                page.session.set("search_progress", 0.0)
                 return
                 
             # Store results in session
@@ -803,16 +760,19 @@ def file_selector_view(page):
             
             page.session.set("selected_paths", selected_paths)
             
-            # Update log with final status and refresh
+            # Update log with final status
             matches_found = len([p for p in selected_paths if p != "No Match"])
             logger.info(f"Search Complete: Found {matches_found} matches out of {len(selected_files)} files")
-            logger.info(f"Fuzzy search completed. Found {matches_found} matches")
             
-            # Hide the cancel button and collapse results
-            cancel_button.visible = False
+            # Mark search as complete
+            page.session.set("search_in_progress", False)
+            page.session.set("search_progress", 1.0)
+            
+            # Collapse results display
             results_display_container = page.session.get("_results_display_container")
             if results_display_container and isinstance(results_display_container.content, ft.ExpansionTile):
                 results_display_container.content.expand = False
+            
             page.update()
             
             # Refresh to show results
@@ -821,14 +781,14 @@ def file_selector_view(page):
         except Exception as e:
             error_msg = f"Error during search: {str(e)}"
             logger.error(f"Error during fuzzy search: {str(e)}")
-            logger.error(error_msg)
+            
+            # Mark search as complete with error
+            page.session.set("search_in_progress", False)
+            page.session.set("search_progress", 0.0)
             
             # Show error in snackbar
             page.snack_bar = ft.SnackBar(content=ft.Text(error_msg))
             page.snack_bar.open = True
-            
-            # Hide cancel button
-            cancel_button.visible = False
             page.update()
     
     logger.info("File Selector page")
@@ -1005,48 +965,6 @@ def file_selector_view(page):
             page.session.set("selected_files", [])
             page.go("/file_selector")
         
-        # Create a scrolling log view for search progress
-        log_view = ft.Column([
-            ft.Text(
-                "Search Progress Log",
-                size=14,
-                weight=ft.FontWeight.BOLD,
-                color=colors['primary_text']
-            ),
-            ft.Container(
-                content=ft.ListView(
-                    spacing=2,
-                    height=200,
-                    key="search_log",
-                ),
-                border=ft.border.all(1, colors['border']),
-                border_radius=5,
-                padding=10,
-            ),
-            ft.Container(
-                content=ft.ElevatedButton(
-                    text="Cancel Search",
-                    icon=ft.Icons.CANCEL,
-                    bgcolor=colors['error'],
-                    color="white",
-                    visible=False,
-                    key="cancel_button",
-                ),
-                padding=ft.padding.symmetric(vertical=10),
-            ),
-        ])
-        
-        log_container = ft.Container(
-            content=log_view,
-            padding=ft.padding.all(10),
-            border=ft.border.all(1, colors['border']),
-            border_radius=10,
-            margin=ft.margin.symmetric(vertical=5),
-            bgcolor=colors['container_bg'],
-            visible=False,  # Start hidden
-            key="log_container",
-        )
-        
         # Build the file list display
         file_list_controls = []
         if selected_files:
@@ -1126,9 +1044,6 @@ def file_selector_view(page):
                 ]
             )
         
-        # Get the log container from session (created by create_search_ui_elements)
-        session_log_container = page.session.get("_log_container")
-
         # Create the main column
         main_column = ft.Column([
             # Header
@@ -1140,12 +1055,6 @@ def file_selector_view(page):
             
             # Selected files section if available
             selected_files_section if selected_files_section else ft.Container(),
-            
-            # Divider before log container
-            ft.Divider(height=20, color=colors['divider']),
-            
-            # Search progress log container (use session container)
-            session_log_container if session_log_container else ft.Container(),
             
         ], alignment=ft.MainAxisAlignment.CENTER)
         
