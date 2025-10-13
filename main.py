@@ -618,6 +618,12 @@ def file_selector_view(page):
                 page.session.set("selected_files", file_paths)
                 logger.info(f"Selected {len(file_paths)} files: {file_paths}")
                 
+                # Store the directory of the first selected file for future FilePicker operations
+                if file_paths:
+                    last_directory = os.path.dirname(file_paths[0])
+                    page.session.set("last_file_directory", last_directory)
+                    logger.info(f"Stored last directory: {last_directory}")
+                
                 # Copy files to temporary directory with sanitized names
                 temp_file_paths, temp_file_info = copy_files_to_temp_directory(file_paths)
                 
@@ -633,11 +639,24 @@ def file_selector_view(page):
         page.overlay.append(file_picker)
         
         def open_file_picker(e):
-            file_picker.pick_files(
-                dialog_title="Select Image and/or PDF Files",
-                allow_multiple=True,
-                allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"]
-            )
+            # Get the last used directory from session
+            last_directory = page.session.get("last_file_directory")
+            
+            if last_directory and os.path.exists(last_directory):
+                logger.info(f"Using last directory as initial path: {last_directory}")
+                file_picker.pick_files(
+                    dialog_title="Select Image and/or PDF Files",
+                    allow_multiple=True,
+                    allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"],
+                    initial_directory=last_directory
+                )
+            else:
+                logger.info("No previous directory stored, using default")
+                file_picker.pick_files(
+                    dialog_title="Select Image and/or PDF Files",
+                    allow_multiple=True,
+                    allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"]
+                )
         
         def on_clear_selection(e):
             """Clear both original selection and temporary files"""
@@ -778,6 +797,11 @@ def file_selector_view(page):
                 page.session.set("selected_csv_file", file_path)
                 logger.info(f"Selected CSV file: {file_path}")
                 
+                # Store the directory for future FilePicker operations
+                last_directory = os.path.dirname(file_path)
+                page.session.set("last_file_directory", last_directory)
+                logger.info(f"Stored last directory: {last_directory}")
+                
                 # Read the file and get columns
                 columns, error = read_csv_file(file_path)
                 logger.info(f"read_csv_file returned: columns={columns}, error={error}")
@@ -791,8 +815,10 @@ def file_selector_view(page):
                     page.session.set("csv_read_error", error)
                     logger.error(f"Failed to read CSV file: {error}")
                 
-                # Clear any previous column selection
+                # Clear any previous column selection and selected files
                 page.session.set("selected_csv_column", None)
+                page.session.set("selected_files", [])  # Clear any previously extracted filenames
+                logger.info("Cleared previous column selection and selected_files list")
                 
                 # Update the display dynamically instead of navigating
                 logger.info("Updating CSV display dynamically")
@@ -825,11 +851,24 @@ def file_selector_view(page):
         page.overlay.append(csv_file_picker)
         
         def open_csv_file_picker(e):
-            csv_file_picker.pick_files(
-                dialog_title="Select CSV, Excel, or Numbers File",
-                allow_multiple=False,
-                allowed_extensions=["csv", "xlsx", "xls", "numbers"]
-            )
+            # Get the last used directory from session
+            last_directory = page.session.get("last_file_directory")
+            
+            if last_directory and os.path.exists(last_directory):
+                logger.info(f"Using last directory as initial path for CSV picker: {last_directory}")
+                csv_file_picker.pick_files(
+                    dialog_title="Select CSV, Excel, or Numbers File",
+                    allow_multiple=False,
+                    allowed_extensions=["csv", "xlsx", "xls", "numbers"],
+                    initial_directory=last_directory
+                )
+            else:
+                logger.info("No previous directory stored for CSV picker, using default")
+                csv_file_picker.pick_files(
+                    dialog_title="Select CSV, Excel, or Numbers File",
+                    allow_multiple=False,
+                    allowed_extensions=["csv", "xlsx", "xls", "numbers"]
+                )
         
         def on_clear_csv_selection(e):
             """Clear CSV file selection and related data"""
@@ -837,6 +876,8 @@ def file_selector_view(page):
             page.session.set("csv_columns", None)
             page.session.set("selected_csv_column", None)
             page.session.set("csv_read_error", None)
+            page.session.set("selected_files", [])  # Clear the extracted filenames
+            logger.info("Cleared CSV selection and selected_files list")
             # Update display dynamically instead of navigating
             update_csv_display()
         
@@ -845,6 +886,55 @@ def file_selector_view(page):
             selected_col = e.control.value
             page.session.set("selected_csv_column", selected_col)
             logger.info(f"Selected column for filename processing: {selected_col}")
+            
+            # Extract filenames from the selected column and add to selected_files
+            if selected_col:
+                current_csv_file = page.session.get("selected_csv_file")
+                if current_csv_file:
+                    try:
+                        # Read the CSV file again to get the data
+                        import pandas as pd
+                        
+                        file_ext = os.path.splitext(current_csv_file)[1].lower()
+                        logger.info(f"Reading CSV file to extract column data: {current_csv_file}")
+                        
+                        if file_ext == '.csv':
+                            df = pd.read_csv(current_csv_file)
+                        elif file_ext in ['.xlsx', '.xls']:
+                            df = pd.read_excel(current_csv_file)
+                        elif file_ext == '.numbers':
+                            df = pd.read_excel(current_csv_file)
+                        else:
+                            raise ValueError(f"Unsupported file format: {file_ext}")
+                        
+                        # Extract non-empty values from the selected column
+                        if selected_col in df.columns:
+                            # Get non-null, non-empty values and convert to strings
+                            column_values = df[selected_col].dropna().astype(str).str.strip()
+                            # Filter out empty strings after stripping
+                            non_empty_values = column_values[column_values != ''].tolist()
+                            
+                            logger.info(f"Extracted {len(non_empty_values)} non-empty values from column '{selected_col}'")
+                            logger.info(f"Filenames from CSV column: {non_empty_values}")
+                            
+                            # Add to selected_files session list
+                            page.session.set("selected_files", non_empty_values)
+                            logger.info(f"Added {len(non_empty_values)} filenames to selected_files list")
+                            
+                        else:
+                            logger.error(f"Column '{selected_col}' not found in CSV file")
+                            page.session.set("selected_files", [])
+                            
+                    except ImportError:
+                        logger.error("Pandas library not available for reading CSV data")
+                        page.session.set("selected_files", [])
+                    except Exception as ex:
+                        logger.error(f"Error extracting data from column '{selected_col}': {str(ex)}")
+                        page.session.set("selected_files", [])
+            else:
+                # Clear selected files if no column is selected
+                page.session.set("selected_files", [])
+            
             # Update display to show selection status
             update_csv_display()
         
@@ -877,7 +967,7 @@ def file_selector_view(page):
                         ft.ElevatedButton("Clear Selection", on_click=on_clear_csv_selection),
                         ft.ElevatedButton("Reload File", on_click=lambda e: reload_csv_file())
                     ], alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Container(height=20)
+                    ft.Divider(height=20, color=colors['divider'])
                 ])
                 
                 # Check for read errors
@@ -886,7 +976,7 @@ def file_selector_view(page):
                     csv_file_display.controls.extend([
                         ft.Text("❌ Error reading file:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                         ft.Text(current_csv_error, size=12, color=colors['secondary_text']),
-                        ft.Container(height=10)
+                        ft.Divider(height=10, color=colors['divider'])
                     ])
                 
                 # Display columns if available
@@ -935,12 +1025,43 @@ def file_selector_view(page):
                     
                     # Show selection status
                     if current_selected_column:
+                        # Get the current selected_files
+                        selected_files = page.session.get("selected_files")
+                        if selected_files is None:
+                            selected_files = []
+                        file_count = len(selected_files) if selected_files else 0
+                        
                         csv_file_display.controls.extend([
                             ft.Text(f"✅ Selected column: {current_selected_column}", 
                                    size=14, color=colors['primary_text']),
-                            ft.Text("This column will be used for fuzzy filename matching and processing.", 
+                            ft.Text(f"📁 Extracted {file_count} filenames from this column", 
+                                   size=12, color=colors['secondary_text']),
+                            ft.Text("These filenames will be used for fuzzy matching and processing.", 
                                    size=12, color=colors['secondary_text'])
                         ])
+                        
+                        # Show the extracted filenames if available
+                        if selected_files and len(selected_files) > 0:
+                            csv_file_display.controls.extend([
+                                ft.Container(height=10),
+                                ft.Text("Extracted filenames:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+                            ])
+                            
+                            # Show filenames in a scrollable container
+                            filename_list = ft.Column([
+                                ft.Text(f"{i+1}. {filename}", size=11, color=colors['secondary_text'])
+                                for i, filename in enumerate(selected_files)
+                            ], spacing=2, scroll=ft.ScrollMode.AUTO, height=min(200, len(selected_files) * 20 + 20))
+                            
+                            csv_file_display.controls.append(
+                                ft.Container(
+                                    content=filename_list,
+                                    border=ft.border.all(1, colors['secondary_text']),
+                                    border_radius=5,
+                                    padding=10,
+                                    margin=ft.margin.symmetric(vertical=5)
+                                )
+                            )
                     else:
                         csv_file_display.controls.append(
                             ft.Text("⚠️ Please select a column to continue with file processing.", 
@@ -968,7 +1089,7 @@ def file_selector_view(page):
         
         return ft.Column([
             ft.Text("File Selector - CSV", size=24, weight=ft.FontWeight.BOLD),
-            ft.Container(height=20),
+            ft.Divider(height=20, color=colors['divider']),
             ft.Text("Select a CSV, Excel, or Numbers file for processing", 
                    size=16, color=colors['primary_text']),
             ft.Text("Supported formats: .csv, .xlsx, .xls, .numbers", 
@@ -976,13 +1097,13 @@ def file_selector_view(page):
             ft.Container(height=10),
             ft.ElevatedButton("Select File", 
                             on_click=open_csv_file_picker),
-            ft.Container(height=20),
+            ft.Divider(height=20, color=colors['divider']),
             ft.Container(
                 content=csv_file_display,
                 height=400,  # Set a fixed height for the scrollable area
                 expand=True
             ),
-            ft.Container(height=20),
+            ft.Divider(height=20, color=colors['divider']),
             ft.Text("Note: The selected column will be used for fuzzy search matching against available files.", 
                    size=12, color=colors['secondary_text'])
         ], alignment="center", scroll=ft.ScrollMode.AUTO)
