@@ -9,7 +9,12 @@ from .home_view import HomeView
 from .about_view import AboutView
 from .settings_view import SettingsView
 from .exit_view import ExitView
-from .file_selector_view import FileSelectorView
+from .file_selector_view import (
+    FileSelectorView,
+    FilePickerSelectorView,
+    GoogleSheetSelectorView,
+    CSVSelectorView
+)
 from .derivatives_view import DerivativesView
 from .storage_view import StorageView
 from .log_view import LogView
@@ -22,6 +27,9 @@ __all__ = [
     'SettingsView',
     'ExitView',
     'FileSelectorView',
+    'FilePickerSelectorView',
+    'GoogleSheetSelectorView',
+    'CSVSelectorView',
     'DerivativesView',
     'StorageView',
     'LogView',

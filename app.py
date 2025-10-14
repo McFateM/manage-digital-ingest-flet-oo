@@ -10,7 +10,8 @@ import logging
 from logger import SnackBarHandler
 from views import (
     HomeView, AboutView, SettingsView, ExitView,
-    FileSelectorView, DerivativesView, StorageView, LogView
+    FilePickerSelectorView, GoogleSheetSelectorView, CSVSelectorView,
+    DerivativesView, StorageView, LogView
 )
 import utils
 
@@ -48,6 +49,47 @@ class MDIApplication:
         # Write an initial log entry
         self.logger.info("Logger initialized - writing to mdi.log and SnackBarHandler attached")
     
+    def get_file_selector_view(self, page: ft.Page):
+        """
+        Get the appropriate file selector view based on the selected file option.
+        
+        Args:
+            page: The Flet page object
+            
+        Returns:
+            The appropriate file selector view instance
+        """
+        # Load persistent settings to get the selected file option
+        try:
+            import json
+            import os
+            persistent_path = os.path.join("_data", "persistent.json")
+            if os.path.exists(persistent_path):
+                with open(persistent_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    selected_option = data.get("selected_file_option", "")
+            else:
+                selected_option = ""
+        except Exception as e:
+            self.logger.warning(f"Failed to load file option from persistent settings: {e}")
+            selected_option = ""
+        
+        # Also check session for current selection
+        session_option = page.session.get("selected_file_option")
+        if session_option:
+            selected_option = session_option
+        
+        # Return the appropriate view based on selection
+        if selected_option == "FilePicker":
+            return FilePickerSelectorView(page)
+        elif selected_option == "Google Sheet":
+            return GoogleSheetSelectorView(page)
+        elif selected_option == "CSV":
+            return CSVSelectorView(page)
+        else:
+            # Default to FilePicker if no selection
+            return FilePickerSelectorView(page)
+    
     def initialize_views(self, page: ft.Page):
         """Initialize all view instances."""
         self.views = {
@@ -56,7 +98,7 @@ class MDIApplication:
             "/about": AboutView(page),
             "/settings": SettingsView(page),
             "/exit": ExitView(page),
-            "/file_selector": FileSelectorView(page),
+            "/file_selector": None,  # Will be dynamically created
             "/derivatives": DerivativesView(page),
             "/storage": StorageView(page),
             "/logs": LogView(page),
@@ -125,8 +167,14 @@ class MDIApplication:
         """Handle route changes."""
         self.logger.info(f"Route changed to: {route.route}")
         
-        # Get the view for the current route
-        view = self.views.get(route.route)
+        # Special handling for file_selector route - dynamically create based on settings
+        if route.route == "/file_selector":
+            view = self.get_file_selector_view(route.page)
+            self.views["/file_selector"] = view
+        else:
+            # Get the view for the current route
+            view = self.views.get(route.route)
+        
         if view:
             self.current_view = view
             # Clear existing controls and add the new view
