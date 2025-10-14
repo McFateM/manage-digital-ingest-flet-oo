@@ -97,8 +97,10 @@ class MDIApplication:
             bgcolor=ft.Colors.BLUE_GREY_100,
             actions=[
                 ft.IconButton(ft.Icons.HOME, tooltip="Home", on_click=nav_home),
-                ft.IconButton(ft.Icons.ARTICLE, tooltip="About", on_click=nav_about),
-                # Vertical separator between ARTICLE and FILE_OPEN icons
+                ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=nav_settings),
+                ft.IconButton(ft.Icons.INFO, tooltip="About", on_click=nav_about),
+                ft.IconButton(ft.Icons.LIST_ALT, tooltip="Application Log", on_click=nav_logs),
+                # Vertical separator between Application Log and File Selector icons
                 ft.Container(
                     width=2,
                     height=23,
@@ -108,8 +110,13 @@ class MDIApplication:
                 ft.IconButton(ft.Icons.FILE_OPEN, tooltip="File Selector", on_click=nav_file_selector),
                 ft.IconButton(ft.Icons.AUTO_FIX_HIGH, tooltip="Derivatives", on_click=nav_derivatives),
                 ft.IconButton(ft.Icons.CLOUD_UPLOAD, tooltip="Storage", on_click=nav_storage),
-                ft.IconButton(ft.Icons.LIST_ALT, tooltip="Application Log", on_click=nav_logs),
-                ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=nav_settings),
+                # Vertical separator before the Exit icon
+                ft.Container(
+                    width=2,
+                    height=23,
+                    bgcolor=ft.Colors.GREY_400,
+                    margin=ft.margin.symmetric(horizontal=4)
+                ),
                 ft.IconButton(ft.Icons.EXIT_TO_APP, tooltip="Exit", on_click=nav_exit),
             ],
         )
