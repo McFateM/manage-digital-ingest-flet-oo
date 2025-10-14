@@ -40,17 +40,17 @@ class AboutView(BaseView):
 
         # Generate session report
         session_data_found = False
-        session_report = "## Current Session Data:\\n\\n"
+        session_report = "## Current Session Data:\n\n"
 
         # Get all session keys and values
         for key in self.page.session.get_keys():
-            session_report += f"**{key}**: `{self.page.session.get(key)}`\\n\\n"
+            session_report += f"**{key}**: `{self.page.session.get(key)}`\n\n"
             session_data_found = True
         
         if not session_data_found:
-            session_report += "No session data found!\\n\\n"
+            session_report += "No session data found!\n\n"
         
-        session_report += "---\\n\\n"
+        session_report += "---\n\n"
         session_report += "*This report shows all key-value pairs stored in `page.session`.*"
 
         # Create a Markdown widget with the session report
