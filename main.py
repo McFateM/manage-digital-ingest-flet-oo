@@ -315,13 +315,13 @@ def exit_view(page):
     ], alignment="center")
 
 # -------------------------------------------------------------------------------
-# show_log_view()
-# Purpose: Renders the search log page with progress display and cancel functionality
+# show_log_overlay()
+# Purpose: Creates an overlay for viewing logs and progress without disrupting the current page
 # Parameters: page - Flet page object for session management and theme handling
-# Returns: ft.Column containing search log interface with cancel button
+# Returns: ft.AlertDialog containing the log interface as an overlay
 # -------------------------------------------------------------------------------
-def show_log_view(page):
-    logger.info("Loaded Show Log page")
+def create_log_overlay(page):
+    """Create the log viewer as an overlay dialog"""
     
     # Get theme-appropriate colors
     colors = get_theme_colors(page)
@@ -340,116 +340,203 @@ def show_log_view(page):
     for entry in log_entries:
         entry = entry.strip()
         if entry:
-            log_controls.append(ft.Text(entry, size=12, color=colors['primary_text']))
+            log_controls.append(ft.Text(entry, size=11, color=colors['primary_text']))
     
     # Create status information
-    status_info = [
-        ft.Text("Process Log & Progress", size=24, weight=ft.FontWeight.BOLD),
-        ft.Divider(height=20, color=colors['divider']),
-    ]
+    status_info = []
     
     # Add current status information
     if selected_files:
         status_info.append(
             ft.Text(f"📁 Files to process: {len(selected_files)}", 
-                   size=16, color=colors['primary_text'])
+                   size=14, color=colors['primary_text'])
         )
     
     if search_directory:
         status_info.append(
             ft.Text(f"🔍 Search directory: {search_directory}", 
-                   size=14, color=colors['secondary_text'])
+                   size=12, color=colors['secondary_text'])
         )
     
     if search_in_progress:
         status_info.append(
             ft.Text("⏳ Process in progress...", 
-                   size=14, color=colors['primary_text'], weight=ft.FontWeight.BOLD)
+                   size=12, color=colors['primary_text'], weight=ft.FontWeight.BOLD)
         )
     
     # Create progress bar
     progress_bar = ft.ProgressBar(
         value=current_progress,
-        width=400,
+        width=350,
         color=ft.Colors.BLUE,
         bgcolor=colors['container_bg']
     )
     
     # Create cancel button
+    def on_cancel_click(e):
+        cancel_process(page)
+        # Refresh the overlay content
+        show_log_overlay(page)
+    
     cancel_button = ft.ElevatedButton(
         text="Cancel Process",
         icon=ft.Icons.CANCEL,
         bgcolor=ft.Colors.RED_600,
         color="white",
         visible=search_in_progress,
-        on_click=lambda e: cancel_process(page)
+        on_click=on_cancel_click
     )
     
-    # Create the main column
-    main_column = ft.Column([
-        ft.Column(status_info, spacing=10),
-        ft.Container(height=20),
-        
-        # Progress section
-        ft.Container(
-            content=ft.Column([
-                ft.Text("Process Progress", 
-                       size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-                progress_bar,
-                ft.Text(f"Progress: {current_progress:.0%}" if current_progress > 0 else "Ready to start...", 
-                       size=14, color=colors['container_text']),
-                cancel_button,
-            ], spacing=10),
-            padding=ft.padding.all(15),
-            border=ft.border.all(1, colors['border']),
-            border_radius=10,
-            bgcolor=colors['container_bg'],
-            margin=ft.margin.symmetric(vertical=10)
-        ),
-        
-        # Log display section
-        ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text("Application Logs", 
-                           size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-                    ft.IconButton(
-                        icon=ft.Icons.REFRESH,
-                        tooltip="Refresh logs",
-                        on_click=lambda e: page.go("/show_log")  # Refresh the page to reload logs
-                    )
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Container(
-                    content=ft.Column(
-                        controls=log_controls,
-                        scroll=ft.ScrollMode.AUTO,
-                        spacing=2
-                    ) if log_controls else ft.Text("No log entries found", 
-                                                  size=14, color=colors['secondary_text']),
-                    height=300,
-                    border=ft.border.all(1, colors['border']),
-                    border_radius=5,
-                    padding=10,
-                    bgcolor=colors['markdown_bg']
-                )
-            ], spacing=10),
-            padding=ft.padding.all(15),
-            border=ft.border.all(1, colors['border']),
-            border_radius=10,
-            bgcolor=colors['container_bg'],
-            margin=ft.margin.symmetric(vertical=10)
-        ),
-        
-    ], alignment=ft.MainAxisAlignment.START, expand=True)
+    # Create refresh button
+    def on_refresh_click(e):
+        # Close current overlay and open a new one with fresh data
+        close_log_overlay(page)
+        show_log_overlay(page)
     
-    return main_column
+    refresh_button = ft.IconButton(
+        icon=ft.Icons.REFRESH,
+        tooltip="Refresh logs",
+        on_click=on_refresh_click
+    )
+    
+    # Create the overlay dialog
+    log_overlay = ft.AlertDialog(
+        modal=False,  # Allow interaction with background
+        title=ft.Row([
+            ft.Text("Process Log & Progress", size=18, weight=ft.FontWeight.BOLD),
+            refresh_button
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        content=ft.Container(
+            content=ft.Column([
+                # Status information
+                ft.Column(status_info, spacing=5) if status_info else ft.Container(),
+                
+                # Progress section
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Process Progress", 
+                               size=16, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                        progress_bar,
+                        ft.Text(f"Progress: {current_progress:.0%}" if current_progress > 0 else "Ready to start...", 
+                               size=12, color=colors['container_text']),
+                        cancel_button,
+                    ], spacing=8),
+                    padding=ft.padding.all(10),
+                    border=ft.border.all(1, colors['border']),
+                    border_radius=8,
+                    bgcolor=colors['container_bg'],
+                    margin=ft.margin.symmetric(vertical=5)
+                ),
+                
+                # Log display section
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Application Logs", 
+                               size=16, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                        ft.Container(
+                            content=ft.Column(
+                                controls=log_controls,
+                                scroll=ft.ScrollMode.AUTO,
+                                spacing=1
+                            ) if log_controls else ft.Text("No log entries found", 
+                                                          size=12, color=colors['secondary_text']),
+                            height=250,
+                            border=ft.border.all(1, colors['border']),
+                            border_radius=5,
+                            padding=8,
+                            bgcolor=colors['markdown_bg']
+                        )
+                    ], spacing=8),
+                    padding=ft.padding.all(10),
+                    border=ft.border.all(1, colors['border']),
+                    border_radius=8,
+                    bgcolor=colors['container_bg'],
+                    margin=ft.margin.symmetric(vertical=5)
+                ),
+                
+            ], spacing=10),
+            width=500,
+            height=400
+        ),
+        actions=[
+            ft.TextButton("Close", on_click=lambda e: close_log_overlay(page))
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    
+    return log_overlay
+
+def show_log_overlay(page):
+    """Show the log overlay dialog"""
+    # Close existing overlay if any
+    close_log_overlay(page)
+    
+    # Create and show new overlay
+    log_overlay = create_log_overlay(page)
+    page.session.set("_log_overlay", log_overlay)
+    page.overlay.append(log_overlay)
+    log_overlay.open = True
+    page.update()
+    logger.info("Opened log overlay")
+
+def close_log_overlay(page):
+    """Close the log overlay dialog"""
+    log_overlay = page.session.get("_log_overlay")
+    if log_overlay:
+        log_overlay.open = False
+        # Remove from overlay list to clean up
+        if log_overlay in page.overlay:
+            page.overlay.remove(log_overlay)
+        page.session.set("_log_overlay", None)
+        page.update()
+        logger.info("Closed log overlay")
+
+def create_log_button(page, text="Show Logs", icon=ft.Icons.LIST_ALT):
+    """Create a button that opens the log overlay"""
+    return ft.ElevatedButton(
+        text=text,
+        icon=icon,
+        on_click=lambda e: show_log_overlay(page)
+    )
+
+# -------------------------------------------------------------------------------
+# show_log_view()
+# Purpose: Legacy function - now redirects to overlay
+# Parameters: page - Flet page object for session management and theme handling
+# Returns: ft.Column containing simple redirect message
+# -------------------------------------------------------------------------------
+def show_log_view(page):
+    logger.info("Show Log page accessed - opening overlay instead")
+    
+    # Show the overlay instead of a full page
+    show_log_overlay(page)
+    
+    # Return a simple page that explains the overlay
+    colors = get_theme_colors(page)
+    return ft.Column([
+        ft.Text("Process Log & Progress", size=24, weight=ft.FontWeight.BOLD),
+        ft.Container(height=20),
+        ft.Text("The log viewer is now displayed as an overlay.", 
+               size=16, color=colors['primary_text']),
+        ft.Text("You can view logs while continuing to work on other pages.", 
+               size=14, color=colors['secondary_text']),
+        ft.Container(height=20),
+        ft.ElevatedButton(
+            text="Show Log Overlay",
+            icon=ft.Icons.VISIBILITY,
+            on_click=lambda e: show_log_overlay(page)
+        ),
+    ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
 
 def cancel_process(page):
     """Cancel the current process"""
     page.session.set("cancel_search", True)
     page.session.set("search_in_progress", False)
     logger.warning("Process cancelled by user")
-    page.go("/show_log")  # Refresh to update UI
+    
+    # Refresh the overlay if it's open, otherwise do nothing
+    if page.session.get("_log_overlay") and page.session.get("_log_overlay").open:
+        show_log_overlay(page)
 
 # -------------------------------------------------------------------------------
 # settings_view()
@@ -716,9 +803,8 @@ def file_selector_view(page):
         logger.info(f"Starting fuzzy search in: {search_dir}")
         logger.info(f"Files to process: {len(selected_files)}")
         
-        # Navigate to the Show Log page to display progress
-        page.go("/show_log")
-        page.update()
+        # Show the log overlay to display progress
+        show_log_overlay(page)
         
         def update_progress(progress):
             """Update progress in session and log"""
@@ -726,7 +812,12 @@ def file_selector_view(page):
                 page.session.set("search_progress", progress)
                 files_done = int(progress * len(selected_files))
                 logger.info(f"Search Progress: {files_done}/{len(selected_files)} files processed ({progress:.0%})")
-                # Force a page update to refresh the progress bar
+                
+                # Update the overlay if it's open
+                if page.session.get("_log_overlay") and page.session.get("_log_overlay").open:
+                    show_log_overlay(page)
+                
+                # Force a page update to refresh any other UI elements
                 if hasattr(page, 'update'):
                     page.update()
             except Exception as e:
@@ -768,6 +859,10 @@ def file_selector_view(page):
             page.session.set("search_in_progress", False)
             page.session.set("search_progress", 1.0)
             
+            # Update the overlay to show completion
+            if page.session.get("_log_overlay") and page.session.get("_log_overlay").open:
+                show_log_overlay(page)
+            
             # Collapse results display
             results_display_container = page.session.get("_results_display_container")
             if results_display_container and isinstance(results_display_container.content, ft.ExpansionTile):
@@ -785,6 +880,10 @@ def file_selector_view(page):
             # Mark search as complete with error
             page.session.set("search_in_progress", False)
             page.session.set("search_progress", 0.0)
+            
+            # Update the overlay to show error state
+            if page.session.get("_log_overlay") and page.session.get("_log_overlay").open:
+                show_log_overlay(page)
             
             # Show error in snackbar
             page.snack_bar = ft.SnackBar(content=ft.Text(error_msg))
@@ -806,8 +905,12 @@ def file_selector_view(page):
             ft.Container(height=20),
             ft.Text("Please select a file option in Settings first.", 
                    size=16, color=colors['secondary_text']),
-            ft.ElevatedButton("Go to Settings", 
-                            on_click=lambda e: page.go("/settings"))
+            ft.Container(height=20),
+            ft.Row([
+                ft.ElevatedButton("Go to Settings", 
+                                on_click=lambda e: page.go("/settings")),
+                create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
         ], alignment="center")
         
         return default_column
@@ -1046,8 +1149,11 @@ def file_selector_view(page):
         
         # Create the main column
         main_column = ft.Column([
-            # Header
-            ft.Text("File Selector - FilePicker", size=24, weight=ft.FontWeight.BOLD),
+            # Header with log button
+            ft.Row([
+                ft.Text("File Selector - FilePicker", size=24, weight=ft.FontWeight.BOLD),
+                create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(height=20),
             
             # File picker section
@@ -1101,7 +1207,10 @@ def file_selector_view(page):
         
         # Create the main column
         google_sheet_column = ft.Column([
-            ft.Text("File Selector - Google Sheet", size=24, weight=ft.FontWeight.BOLD),
+            ft.Row([
+                ft.Text("File Selector - Google Sheet", size=24, weight=ft.FontWeight.BOLD),
+                create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(height=20),
             sheet_connection_section,
             sheet_data_section
@@ -1355,7 +1464,7 @@ def file_selector_view(page):
             file_selection_content = ft.Column([
                 ft.Text("Step 1: Select CSV File", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.ElevatedButton("Select File", on_click=open_csv_file_picker),
-            ], spacing=10)
+            ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.START)
             
             if current_csv_file:
                 filename = os.path.basename(current_csv_file)
@@ -1527,14 +1636,14 @@ def file_selector_view(page):
                                         disabled=not bool(page.session.get("search_directory"))
                                     ) if selected_files else ft.Container(),
                                     ft.ElevatedButton(
-                                        text="📊 Show Search Log",
+                                        text="📊 Show Application Log",
                                         on_click=lambda e: page.go("/show_log"),
                                         bgcolor=colors.get('secondary_bg', ft.Colors.BLUE_50),
                                         color=colors.get('secondary_text', ft.Colors.BLUE_800)
                                     )
                                 ]),
                                 ft.Text(
-                                    "💡 Tip: Use 'Show Search Log' to monitor progress and cancel if needed", 
+                                    "💡 Tip: Use 'Show Application Log' to monitor progress and cancel if needed", 
                                     size=12,
                                     color=colors['secondary_text'],
                                     italic=True
@@ -1584,7 +1693,10 @@ def file_selector_view(page):
         
         # Create the main CSV column
         csv_main_column = ft.Column([
-            ft.Text("File Selector - CSV", size=24, weight=ft.FontWeight.BOLD),
+            ft.Row([
+                ft.Text("File Selector - CSV", size=24, weight=ft.FontWeight.BOLD),
+                create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Divider(height=20, color=colors['divider']),
             ft.Text("Process CSV, Excel, or Numbers files step by step", 
                    size=16, color=colors['primary_text']),
@@ -2079,11 +2191,12 @@ def build_appbar(page):
         title=ft.Text("MDI"),
         actions=[
             ft.IconButton(ft.Icons.HOME, tooltip="Home", on_click=lambda e: page.go("/")),
-            ft.IconButton(ft.Icons.INFO, tooltip="About", on_click=lambda e: page.go("/about")),
             ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=lambda e: page.go("/settings")),
+            ft.IconButton(ft.Icons.INFO, tooltip="About", on_click=lambda e: page.go("/about")),
+            ft.IconButton(ft.Icons.ARTICLE, tooltip="Show Application Log", on_click=lambda e: page.go("/show_log")),
+            ft.Container(width=1, height=30, bgcolor=ft.Colors.GREY_400),  # Vertical separator
             ft.IconButton(ft.Icons.FILE_OPEN, tooltip="Select Files for Ingest", on_click=lambda e: page.go("/file_selector")),
             ft.IconButton(ft.Icons.PHOTO_SIZE_SELECT_LARGE_SHARP, tooltip="Create Derivatives from Selected Files", on_click=lambda e: page.go("/derivatives")),
-            ft.IconButton(ft.Icons.ARTICLE, tooltip="Show Search Log", on_click=lambda e: page.go("/show_log")),
             ft.IconButton(ft.Icons.STORAGE, tooltip="Engage Azure Storage", on_click=lambda e: page.go("/storage")),
             ft.IconButton(ft.Icons.EXIT_TO_APP, tooltip="Exit", on_click=lambda e: page.go("/exit"))
         ]
@@ -2118,6 +2231,7 @@ def route_change(e):
 # Returns: None (configures page and starts application)
 # -------------------------------------------------------------------------------
 def main(page: ft.Page):
+    # page.show_semantics_debugger = True  # Enable for accessibility debugging
     page.title = "Manage Digital Ingest: a Flet Multi-Page App"
     
     # Set window dimensions - increase height by 100 pixels from typical default
