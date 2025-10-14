@@ -151,12 +151,26 @@ class MDIApplication:
         # Configure page
         page.title = "Manage Digital Ingest: a Flet Multi-Page App"
         
+        # Load persistent settings from persistent storage
+        window_height = 700  # Default value
+        theme_mode = "Light"  # Default theme
+        try:
+            with open("_data/persistent.json", "r", encoding="utf-8") as f:
+                persistent_data = utils.json.load(f)
+                window_height = persistent_data.get("window-height", 700)
+                theme_mode = persistent_data.get("selected_theme", "Light")
+        except Exception as e:
+            self.logger.warning(f"Failed to load persistent settings from persistent.json: {e}")
+        
         # Set window dimensions
-        page.window.height = 700
+        page.window.height = window_height
         page.window.min_height = 500
         
-        # Set default theme mode to Light
-        page.theme_mode = ft.ThemeMode.LIGHT
+        # Set theme mode from persistent settings
+        if theme_mode == "Dark":
+            page.theme_mode = ft.ThemeMode.DARK
+        else:
+            page.theme_mode = ft.ThemeMode.LIGHT
         
         # Enable page-level scrolling
         page.scroll = ft.ScrollMode.AUTO

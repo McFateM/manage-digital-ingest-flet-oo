@@ -8,12 +8,52 @@ application settings and configurations.
 import flet as ft
 from views.base_view import BaseView
 import json
+import os
 
 
 class SettingsView(BaseView):
     """
     Settings view class for configuration management.
     """
+    
+    def load_persistent_settings(self):
+        """Load settings from persistent.json"""
+        try:
+            persistent_path = os.path.join("_data", "persistent.json")
+            if os.path.exists(persistent_path):
+                with open(persistent_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data
+        except Exception as e:
+            self.logger.warning(f"Failed to load persistent settings: {e}")
+        return {}
+    
+    def save_persistent_settings(self, settings):
+        """Save settings to persistent.json"""
+        try:
+            persistent_path = os.path.join("_data", "persistent.json")
+            # Ensure the _data directory exists
+            os.makedirs("_data", exist_ok=True)
+            
+            # Load existing data to preserve other settings
+            existing_data = {}
+            if os.path.exists(persistent_path):
+                try:
+                    with open(persistent_path, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                except Exception:
+                    self.logger.warning("Failed to read existing persistent data")
+            
+            # Update with new settings
+            existing_data.update(settings)
+            
+            # Write back to file
+            with open(persistent_path, 'w', encoding='utf-8') as f:
+                json.dump(existing_data, f, indent=2)
+            
+            self.logger.info(f"Saved persistent settings: {settings}")
+        except Exception as e:
+            self.logger.error(f"Failed to save persistent settings: {e}")
     
     def render(self) -> ft.Column:
         """
@@ -47,12 +87,26 @@ class SettingsView(BaseView):
         self.logger.info(f"Available storage options: {azure_blob_options}")
         self.logger.info(f"Available collection options: {cb_collection_options}")
         
-        # Log current session selections if they exist
-        current_mode = self.page.session.get("selected_mode")
-        current_file_option = self.page.session.get("selected_file_option")
-        current_storage = self.page.session.get("selected_storage")
-        current_collection = self.page.session.get("selected_collection")
+        # Load persistent settings
+        persistent_settings = self.load_persistent_settings()
         
+        # Get current selections from session or fall back to persistent settings
+        current_mode = self.page.session.get("selected_mode") or persistent_settings.get("selected_mode")
+        current_file_option = self.page.session.get("selected_file_option") or persistent_settings.get("selected_file_option")
+        current_storage = self.page.session.get("selected_storage") or persistent_settings.get("selected_storage")
+        current_collection = self.page.session.get("selected_collection") or persistent_settings.get("selected_collection")
+        
+        # Store in session if loaded from persistent
+        if current_mode:
+            self.page.session.set("selected_mode", current_mode)
+        if current_file_option:
+            self.page.session.set("selected_file_option", current_file_option)
+        if current_storage:
+            self.page.session.set("selected_storage", current_storage)
+        if current_collection:
+            self.page.session.set("selected_collection", current_collection)
+        
+        # Log current session selections if they exist
         if current_mode:
             self.logger.info(f"Current mode selection: {current_mode}")
         if current_file_option:
@@ -68,8 +122,8 @@ class SettingsView(BaseView):
         
         # Create the collection dropdown reference
         collection_dropdown = ft.Dropdown(
-            label="Select Collection",
-            value=current_collection,
+            label="Select Target CBCollection",
+            value=current_collection if current_collection else "",
             options=[ft.dropdown.Option(collection) for collection in cb_collection_options],
             width=300,
             disabled=not is_collection_enabled
@@ -78,7 +132,7 @@ class SettingsView(BaseView):
         # Create the collection container reference
         collection_settings_container = ft.Container(
             content=ft.Column([
-                ft.Text("CB Collection Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                # ft.Text("CB Collection Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
                 collection_dropdown
             ]),
             padding=ft.padding.all(8),
@@ -92,6 +146,7 @@ class SettingsView(BaseView):
         # Dropdown change handlers
         def on_mode_change(e):
             self.page.session.set("selected_mode", e.control.value)
+            self.save_persistent_settings({"selected_mode": e.control.value})
             self.logger.info(f"Mode selected: {e.control.value}")
             self.log_all_current_selections()
             
@@ -103,6 +158,7 @@ class SettingsView(BaseView):
         
         def on_collection_change(e):
             self.page.session.set("selected_collection", e.control.value)
+            self.save_persistent_settings({"selected_collection": e.control.value})
             self.logger.info(f"Collection selected: {e.control.value}")
             self.log_all_current_selections()
         
@@ -111,11 +167,13 @@ class SettingsView(BaseView):
         
         def on_file_selector_change(e):
             self.page.session.set("selected_file_option", e.control.value)
+            self.save_persistent_settings({"selected_file_option": e.control.value})
             self.logger.info(f"File option selected: {e.control.value}")
             self.log_all_current_selections()
         
         def on_storage_change(e):
             self.page.session.set("selected_storage", e.control.value)
+            self.save_persistent_settings({"selected_storage": e.control.value})
             self.logger.info(f"Storage selected: {e.control.value}")
             self.log_all_current_selections()
         
@@ -129,13 +187,17 @@ class SettingsView(BaseView):
                 self.page.theme_mode = ft.ThemeMode.DARK
             
             self.page.update()
+            self.save_persistent_settings({"selected_theme": theme_value})
             self.logger.info(f"Theme changed to: {theme_value}")
             self.page.session.set("selected_theme", theme_value)
         
-        # Get current theme for selector
-        current_theme = "Light"  # Default to Light
+        # Get current theme for selector - check persistent settings first
+        current_theme = persistent_settings.get("selected_theme", "Light")
+        # Override with current page theme if different
         if self.page.theme_mode == ft.ThemeMode.DARK:
             current_theme = "Dark"
+        elif self.page.theme_mode == ft.ThemeMode.LIGHT:
+            current_theme = "Light"
         
         # Theme selector container
         theme_settings_container = ft.Container(
@@ -167,10 +229,10 @@ class SettingsView(BaseView):
         # Create containers with dropdowns
         mode_settings_container = ft.Container(
             content=ft.Column([
-                ft.Text("Mode Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                # ft.Text("Mode Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
                 ft.Dropdown(
-                    label="Select Mode",
-                    value=current_mode,
+                    label="Select the Processing Mode",
+                    value=current_mode if current_mode else "",
                     options=[ft.dropdown.Option(mode) for mode in mode_options],
                     on_change=on_mode_change,
                     width=300
@@ -185,10 +247,10 @@ class SettingsView(BaseView):
         
         file_selector_settings_container = ft.Container(
             content=ft.Column([
-                ft.Text("File Selector Options", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                # ft.Text("File Selector Options", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
                 ft.Dropdown(
-                    label="Select File Option",
-                    value=current_file_option,
+                    label="Choose a File Selection Option",
+                    value=current_file_option if current_file_option else "",
                     options=[ft.dropdown.Option(option) for option in file_selector_options],
                     on_change=on_file_selector_change,
                     width=300
@@ -203,10 +265,10 @@ class SettingsView(BaseView):
         
         storage_settings_container = ft.Container(
             content=ft.Column([
-                ft.Text("Object Storage Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
+                # ft.Text("Object Storage Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
                 ft.Dropdown(
-                    label="Select Storage",
-                    value=current_storage,
+                    label="Select Azure Storage",
+                    value=current_storage if current_storage else "",
                     options=[ft.dropdown.Option(storage) for storage in azure_blob_options],
                     on_change=on_storage_change,
                     width=300
@@ -222,12 +284,12 @@ class SettingsView(BaseView):
         return ft.Column([
             ft.Text("Settings Page", size=24, weight=ft.FontWeight.BOLD),
             ft.Divider(height=15, color=colors['divider']),
-            theme_settings_container,
             mode_settings_container,
             file_selector_settings_container,
             storage_settings_container,
             collection_settings_container,
-            ft.Divider(height=15, color=colors['divider'])
+            ft.Divider(height=15, color=colors['divider']),
+            theme_settings_container
         ], alignment="center")
     
     def log_all_current_selections(self):
