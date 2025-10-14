@@ -179,13 +179,13 @@ def home_view(page):
 
     x = ft.Column(
         scroll = ft.ScrollMode.AUTO,
-        spacing = 5,
+        spacing = 4,
         expand = True,
         alignment = ft.MainAxisAlignment.CENTER,
         horizontal_alignment = ft.CrossAxisAlignment.CENTER,
         controls = [
             ft.Container(
-                height = 10,
+                height = 8,
             ),
             ft.Image(
                 src = 'logo_for_subsplus.png',  # Updated to Grinnell College Libraries logo
@@ -196,12 +196,12 @@ def home_view(page):
             ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍",color = colors['secondary_text']),
             ft.Text("Manage Digital Ingest: a Flet Multi-Page App", size=35),
             ft.Markdown("A Flet Python app for managing Grinnell College ingest of digital objects to Alma or CollectionBuilder"),
-            ft.Divider(height=20, color=colors['divider']),
+            ft.Divider(height=15, color=colors['divider']),
             md_widget,
             # ft.FilledButton("Go to Counter", on_click=data.go("/counter/test/0")),
-            ft.Divider(height=20, color=colors['divider']),
+            ft.Divider(height=15, color=colors['divider']),
             ft.Container(
-                height = 80,
+                height = 60,
                 content = ft.Markdown("**Thanks for choosing Flet!**"),
             ),
         ],
@@ -263,13 +263,13 @@ def about_view(page):
 
     x = ft.Column(
         scroll = ft.ScrollMode.AUTO,
-        spacing = 5,
+        spacing = 4,
         expand = True,
         alignment = ft.MainAxisAlignment.CENTER,
         horizontal_alignment = ft.CrossAxisAlignment.CENTER,
         controls = [
             ft.Container(
-                height = 10,
+                height = 8,
             ),
             ft.Image(
                 src = 'logo_for_subsplus.png',  # Updated to Grinnell College Libraries logo
@@ -280,18 +280,18 @@ def about_view(page):
             ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍",color = colors['secondary_text']),
             ft.Text("Manage Digital Ingest: a Flet Multi-Page App", size=35),
             ft.Markdown("A Flet Python app for managing Grinnell College ingest of digital objects to Alma or CollectionBuilder"),
-            ft.Divider(height=20, color=colors['divider']),
+            ft.Divider(height=15, color=colors['divider']),
             md_widget,
             # ft.FilledButton("Go to Counter", on_click=data.go("/counter/test/0")),
-            ft.Divider(height=20, color=colors['divider']),
+            ft.Divider(height=15, color=colors['divider']),
             ft.Row([
                 ft.ElevatedButton("Log INFO", on_click=_log_info),
                 ft.ElevatedButton("Log WARNING", on_click=_log_warn),
                 ft.ElevatedButton("Log ERROR", on_click=_log_error),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Divider(height=20, color=colors['divider']),
+            ft.Divider(height=15, color=colors['divider']),
             ft.Container(
-                height = 80,
+                height = 60,
                 content = ft.Markdown("**Thanks for choosing Flet!**"),
             ),
         ],
@@ -409,7 +409,7 @@ def create_log_overlay(page):
         content=ft.Container(
             content=ft.Column([
                 # Status information
-                ft.Column(status_info, spacing=5) if status_info else ft.Container(),
+                ft.Column(status_info, spacing=4) if status_info else ft.Container(),
                 
                 # Progress section
                 ft.Container(
@@ -420,12 +420,12 @@ def create_log_overlay(page):
                         ft.Text(f"Progress: {current_progress:.0%}" if current_progress > 0 else "Ready to start...", 
                                size=12, color=colors['container_text']),
                         cancel_button,
-                    ], spacing=8),
-                    padding=ft.padding.all(10),
+                    ], spacing=6),
+                    padding=ft.padding.all(8),
                     border=ft.border.all(1, colors['border']),
                     border_radius=8,
                     bgcolor=colors['container_bg'],
-                    margin=ft.margin.symmetric(vertical=5)
+                    margin=ft.margin.symmetric(vertical=4)
                 ),
                 
                 # Log display section
@@ -440,21 +440,21 @@ def create_log_overlay(page):
                                 spacing=1
                             ) if log_controls else ft.Text("No log entries found", 
                                                           size=12, color=colors['secondary_text']),
-                            height=250,
+                            height=188,
                             border=ft.border.all(1, colors['border']),
                             border_radius=5,
-                            padding=8,
+                            padding=6,
                             bgcolor=colors['markdown_bg']
                         )
-                    ], spacing=8),
-                    padding=ft.padding.all(10),
+                    ], spacing=6),
+                    padding=ft.padding.all(8),
                     border=ft.border.all(1, colors['border']),
                     border_radius=8,
                     bgcolor=colors['container_bg'],
-                    margin=ft.margin.symmetric(vertical=5)
+                    margin=ft.margin.symmetric(vertical=4)
                 ),
                 
-            ], spacing=10),
+            ], spacing=8),
             width=500,
             height=400
         ),
@@ -515,18 +515,18 @@ def show_log_view(page):
     colors = get_theme_colors(page)
     return ft.Column([
         ft.Text("Process Log & Progress", size=24, weight=ft.FontWeight.BOLD),
-        ft.Container(height=20),
+        ft.Container(height=15),
         ft.Text("The log viewer is now displayed as an overlay.", 
                size=16, color=colors['primary_text']),
         ft.Text("You can view logs while continuing to work on other pages.", 
                size=14, color=colors['secondary_text']),
-        ft.Container(height=20),
+        ft.Container(height=15),
         ft.ElevatedButton(
             text="Show Log Overlay",
             icon=ft.Icons.VISIBILITY,
             on_click=lambda e: show_log_overlay(page)
         ),
-    ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+    ], alignment=ft.MainAxisAlignment.CENTER, spacing=8)
 
 def cancel_process(page):
     """Cancel the current process"""
@@ -604,10 +604,10 @@ def settings_view(page):
             ft.Text("CB Collection Selector", size=18, weight=ft.FontWeight.BOLD, color=colors['container_text']),
             collection_dropdown
         ]),
-        padding=ft.padding.all(10),
+        padding=ft.padding.all(8),
         border=ft.border.all(1, colors['border']),
         border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
+        margin=ft.margin.symmetric(vertical=4),
         bgcolor=colors['container_bg'],
         opacity=1.0 if is_collection_enabled else 0.5
     )
@@ -689,11 +689,11 @@ def settings_view(page):
                 on_change=on_theme_change,
                 width=150
             )
-        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
-        padding=ft.padding.all(10),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=8),
+        padding=ft.padding.all(8),
         border=ft.border.all(1, colors['border']),
         border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
+        margin=ft.margin.symmetric(vertical=4),
         bgcolor=colors['container_bg']
     )
     
@@ -709,10 +709,10 @@ def settings_view(page):
                 width=300
             )
         ]),
-        padding=ft.padding.all(10),
+        padding=ft.padding.all(8),
         border=ft.border.all(1, colors['border']),
         border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
+        margin=ft.margin.symmetric(vertical=4),
         bgcolor=colors['container_bg']
     )
     
@@ -727,10 +727,10 @@ def settings_view(page):
                 width=300
             )
         ]),
-        padding=ft.padding.all(10),
+        padding=ft.padding.all(8),
         border=ft.border.all(1, colors['border']),
         border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
+        margin=ft.margin.symmetric(vertical=4),
         bgcolor=colors['container_bg']
     )
     
@@ -745,22 +745,22 @@ def settings_view(page):
                 width=300
             )
         ]),
-        padding=ft.padding.all(10),
+        padding=ft.padding.all(8),
         border=ft.border.all(1, colors['border']),
         border_radius=10,
-        margin=ft.margin.symmetric(vertical=5),
+        margin=ft.margin.symmetric(vertical=4),
         bgcolor=colors['container_bg']
     )
     
     return ft.Column([
         ft.Text("Settings Page", size=24, weight=ft.FontWeight.BOLD),
-        ft.Divider(height=20, color=colors['divider']),
+        ft.Divider(height=15, color=colors['divider']),
         theme_settings_container,
         mode_settings_container,
         file_selector_settings_container,
         storage_settings_container,
         collection_settings_container,
-        ft.Divider(height=20, color=colors['divider'])
+        ft.Divider(height=15, color=colors['divider'])
     ], alignment="center")
 
 # Helper function to read recent log entries
@@ -902,15 +902,15 @@ def file_selector_view(page):
     if not current_file_option:
         default_column = ft.Column([
             ft.Text("File Selector Page", size=24, weight=ft.FontWeight.BOLD),
-            ft.Container(height=20),
+            ft.Container(height=15),
             ft.Text("Please select a file option in Settings first.", 
                    size=16, color=colors['secondary_text']),
-            ft.Container(height=20),
+            ft.Container(height=15),
             ft.Row([
                 ft.ElevatedButton("Go to Settings", 
                                 on_click=lambda e: page.go("/settings")),
                 create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=20)
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=15)
         ], alignment="center")
         
         return default_column
@@ -1007,61 +1007,61 @@ def file_selector_view(page):
             page.session.set("temp_files", [])
             page.session.set("temp_file_info", [])
         
-    # FilePicker configuration for images and PDFs
-    def on_file_picker_result(e: ft.FilePickerResultEvent):
-        if e.files:
-            # Store original file paths in session
-            file_paths = [file.path for file in e.files if file.path]
-            page.session.set("selected_files", file_paths)
-            logger.info(f"Selected {len(file_paths)} files: {file_paths}")
+        # FilePicker configuration for images and PDFs
+        def on_file_picker_result(e: ft.FilePickerResultEvent):
+            if e.files:
+                # Store original file paths in session
+                file_paths = [file.path for file in e.files if file.path]
+                page.session.set("selected_files", file_paths)
+                logger.info(f"Selected {len(file_paths)} files: {file_paths}")
+                
+                # Store the directory of the first selected file for future FilePicker operations
+                if file_paths:
+                    last_directory = os.path.dirname(file_paths[0])
+                    page.session.set("last_file_directory", last_directory)
+                    save_last_directory(last_directory)  # Save persistently
+                    logger.info(f"Stored last directory: {last_directory}")
+                
+                # Copy files to temporary directory with sanitized names
+                temp_file_paths, temp_file_info = copy_files_to_temp_directory(file_paths)
+                
+                # Refresh the page to show selected files
+                page.go("/file_selector")
+            else:
+                logger.info("No files selected")
+        
+        # Create FilePicker with image and PDF filters
+        file_picker = ft.FilePicker(
+            on_result=on_file_picker_result
+        )
+        page.overlay.append(file_picker)
             
-            # Store the directory of the first selected file for future FilePicker operations
-            if file_paths:
-                last_directory = os.path.dirname(file_paths[0])
-                page.session.set("last_file_directory", last_directory)
-                save_last_directory(last_directory)  # Save persistently
-                logger.info(f"Stored last directory: {last_directory}")
+        def open_file_picker(e):
+            # Get the last used directory from session, or load from persistent storage
+            last_directory = page.session.get("last_file_directory")
             
-            # Copy files to temporary directory with sanitized names
-            temp_file_paths, temp_file_info = copy_files_to_temp_directory(file_paths)
+            # If not in session, try to load from persistent storage
+            if not last_directory:
+                last_directory = load_last_directory()
+                if last_directory:
+                    page.session.set("last_file_directory", last_directory)
             
-            # Refresh the page to show selected files
-            page.go("/file_selector")
-        else:
-            logger.info("No files selected")
-    
-    # Create FilePicker with image and PDF filters
-    file_picker = ft.FilePicker(
-        on_result=on_file_picker_result
-    )
-    page.overlay.append(file_picker)
-        
-    def open_file_picker(e):
-        # Get the last used directory from session, or load from persistent storage
-        last_directory = page.session.get("last_file_directory")
-        
-        # If not in session, try to load from persistent storage
-        if not last_directory:
-            last_directory = load_last_directory()
-            if last_directory:
-                page.session.set("last_file_directory", last_directory)
-        
-        if last_directory and os.path.exists(last_directory):
-            logger.info(f"Using last directory as initial path: {last_directory}")
-            file_picker.pick_files(
-                dialog_title="Select Image and/or PDF Files",
-                allow_multiple=True,
-                allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"],
-                initial_directory=last_directory
-            )
-        else:
-            logger.info("No previous directory stored, using default")
-            file_picker.pick_files(
-                dialog_title="Select Image and/or PDF Files",
-                allow_multiple=True,
-                allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"]
-            )
-        
+            if last_directory and os.path.exists(last_directory):
+                logger.info(f"Using last directory as initial path: {last_directory}")
+                file_picker.pick_files(
+                    dialog_title="Select Image and/or PDF Files",
+                    allow_multiple=True,
+                    allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"],
+                    initial_directory=last_directory
+                )
+            else:
+                logger.info("No previous directory stored, using default")
+                file_picker.pick_files(
+                    dialog_title="Select Image and/or PDF Files",
+                    allow_multiple=True,
+                    allowed_extensions=["jpg", "jpeg", "png", "gif", "bmp", "tiff", "pdf"]
+                )
+            
         def on_clear_selection(e):
             """Clear both original selection and temporary files"""
             clear_temp_directory()
@@ -1088,7 +1088,7 @@ def file_selector_view(page):
                     ft.Text(f"Temporary directory: {temp_dir}", 
                            size=12, color=colors['secondary_text'])
                 )
-                file_list_controls.append(ft.Container(height=5))
+                file_list_controls.append(ft.Container(height=4))
             
             # Display file information
             for i, info in enumerate(temp_file_info, 1):
@@ -1106,7 +1106,7 @@ def file_selector_view(page):
                                size=14, color=colors['secondary_text'])
                     )
             
-            file_list_controls.append(ft.Container(height=10))
+            file_list_controls.append(ft.Container(height=8))
             file_list_controls.append(
                 ft.ElevatedButton("Clear Selection", on_click=on_clear_selection)
             )
@@ -1128,10 +1128,10 @@ def file_selector_view(page):
                            size=16, color=colors['primary_text']),
                     ft.Text("Files are automatically copied to a temporary directory with space-free names", 
                            size=14, color=colors['secondary_text']),
-                    ft.Container(height=10),
+                    ft.Container(height=8),
                     ft.ElevatedButton("Open File Picker", 
                                     on_click=open_file_picker),
-                ], spacing=10)
+                ], spacing=8)
             ]
         )
         
@@ -1143,7 +1143,7 @@ def file_selector_view(page):
                 leading=ft.Icon(ft.Icons.CHECK_CIRCLE),
                 initially_expanded=True,
                 controls=[
-                    ft.Column(file_list_controls, spacing=5)
+                    ft.Column(file_list_controls, spacing=4)
                 ]
             )
         
@@ -1154,7 +1154,7 @@ def file_selector_view(page):
                 ft.Text("File Selector - FilePicker", size=24, weight=ft.FontWeight.BOLD),
                 create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Container(height=20),
+            ft.Container(height=15),
             
             # File picker section
             file_picker_section,
@@ -1179,16 +1179,16 @@ def file_selector_view(page):
                 ft.Column([
                     ft.Text("Import file list from a Google Sheet", 
                            size=16, color=colors['primary_text']),
-                    ft.Container(height=10),
+                    ft.Container(height=8),
                     ft.TextField(
                         label="Google Sheet URL",
                         hint_text="https://docs.google.com/spreadsheets/d/...",
                         width=400
                     ),
-                    ft.Container(height=10),
+                    ft.Container(height=8),
                     ft.ElevatedButton("Connect to Google Sheet", 
                                     on_click=lambda e: logger.info("Google Sheet connection button clicked")),
-                ], spacing=10)
+                ], spacing=8)
             ]
         )
         
@@ -1201,7 +1201,7 @@ def file_selector_view(page):
                 ft.Column([
                     ft.Text("Sheet data will be displayed here...", 
                            size=14, color=colors['secondary_text'])
-                ], spacing=10)
+                ], spacing=8)
             ]
         )
         
@@ -1211,7 +1211,7 @@ def file_selector_view(page):
                 ft.Text("File Selector - Google Sheet", size=24, weight=ft.FontWeight.BOLD),
                 create_log_button(page, "Show Logs", ft.Icons.LIST_ALT)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Container(height=20),
+            ft.Container(height=15),
             sheet_connection_section,
             sheet_data_section
         ], alignment="center")
@@ -1429,7 +1429,7 @@ def file_selector_view(page):
         page.session.set("_results_display_container", results_display_container)
         
         # Build the CSV file display as a reference we can update (no nested scroll)
-        csv_file_display = ft.Column([], spacing=10)
+        csv_file_display = ft.Column([], spacing=8)
         
         def update_csv_display():
             """Update the CSV file display with current session data"""
@@ -1464,12 +1464,12 @@ def file_selector_view(page):
             file_selection_content = ft.Column([
                 ft.Text("Step 1: Select CSV File", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.ElevatedButton("Select File", on_click=open_csv_file_picker),
-            ], spacing=10, horizontal_alignment=ft.CrossAxisAlignment.START)
+            ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.START)
             
             if current_csv_file:
                 filename = os.path.basename(current_csv_file)
                 file_selection_content.controls.extend([
-                    ft.Container(height=5),
+                    ft.Container(height=4),
                     ft.Text(f"✅ Selected: {filename}", size=14, color=colors['primary_text']),
                     ft.Text(f"Path: {current_csv_file}", size=12, color=colors['secondary_text']),
                     ft.Row([
@@ -1488,7 +1488,7 @@ def file_selector_view(page):
             
             # Columns Display Section
             if current_csv_file:
-                columns_content = ft.Column([], spacing=10)
+                columns_content = ft.Column([], spacing=8)
                 
                 if current_csv_error:
                     columns_content.controls.extend([
@@ -2134,26 +2134,7 @@ def derivatives_view(page):
             )
         ], alignment=ft.MainAxisAlignment.CENTER),
         
-        ft.Divider(height=10, color=colors['divider']),
-        
-        # Log display
-        ft.Container(
-            content=ft.Column([
-                ft.Text("Processing Log:", size=16, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-                ft.ListView(
-                    controls=[],
-                    height=200,
-                    spacing=2,
-                    key="derivatives_log",
-                )
-            ]),
-            padding=ft.padding.all(15),
-            border=ft.border.all(1, colors['border']),
-            border_radius=10,
-            bgcolor=colors['container_bg'],
-            height=350,
-            expand=True
-        )
+        ft.Divider(height=10, color=colors['divider'])
         
     ], alignment="center")
 
@@ -2194,7 +2175,7 @@ def build_appbar(page):
             ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=lambda e: page.go("/settings")),
             ft.IconButton(ft.Icons.INFO, tooltip="About", on_click=lambda e: page.go("/about")),
             ft.IconButton(ft.Icons.ARTICLE, tooltip="Show Application Log", on_click=lambda e: page.go("/show_log")),
-            ft.Container(width=1, height=30, bgcolor=ft.Colors.GREY_400),  # Vertical separator
+            ft.Container(width=1, height=23, bgcolor=ft.Colors.GREY_400),  # Vertical separator (reduced by 25%)
             ft.IconButton(ft.Icons.FILE_OPEN, tooltip="Select Files for Ingest", on_click=lambda e: page.go("/file_selector")),
             ft.IconButton(ft.Icons.PHOTO_SIZE_SELECT_LARGE_SHARP, tooltip="Create Derivatives from Selected Files", on_click=lambda e: page.go("/derivatives")),
             ft.IconButton(ft.Icons.STORAGE, tooltip="Engage Azure Storage", on_click=lambda e: page.go("/storage")),
@@ -2235,7 +2216,7 @@ def main(page: ft.Page):
     page.title = "Manage Digital Ingest: a Flet Multi-Page App"
     
     # Set window dimensions - increase height by 100 pixels from typical default
-    page.window.height = 700  # Default is typically 600, so adding 100
+    page.window.height = 800
     page.window.min_height = 500
     
     # Set default theme mode to Light
