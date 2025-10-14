@@ -94,7 +94,7 @@ class MDIApplication:
             leading_width=40,
             title=ft.Text("Manage Digital Ingest"),
             center_title=False,
-            bgcolor=ft.Colors.SURFACE_VARIANT,
+            bgcolor=ft.Colors.BLUE_GREY_100,
             actions=[
                 ft.IconButton(ft.Icons.HOME, tooltip="Home", on_click=nav_home),
                 ft.IconButton(ft.Icons.ARTICLE, tooltip="About", on_click=nav_about),
