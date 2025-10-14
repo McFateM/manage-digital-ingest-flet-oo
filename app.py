@@ -132,7 +132,7 @@ class MDIApplication:
             page.go("/exit")
         
         return ft.AppBar(
-            leading=ft.Icon(ft.Icons.PALETTE),
+            leading=ft.Icon(ft.Icons.PERM_MEDIA_ROUNDED),
             leading_width=40,
             title=ft.Text("Manage Digital Ingest"),
             center_title=False,
@@ -202,6 +202,7 @@ class MDIApplication:
         # Load persistent settings from persistent storage
         window_height = 700  # Default value
         theme_mode = "Light"  # Default theme
+        persistent_data = {}
         try:
             with open("_data/persistent.json", "r", encoding="utf-8") as f:
                 persistent_data = utils.json.load(f)
@@ -209,6 +210,22 @@ class MDIApplication:
                 theme_mode = persistent_data.get("selected_theme", "Light")
         except Exception as e:
             self.logger.warning(f"Failed to load persistent settings from persistent.json: {e}")
+        
+        # Initialize page.session variables with values from persistent.json
+        session_keys = [
+            "selected_mode",
+            "selected_file_option", 
+            "selected_storage",
+            "selected_collection",
+            "selected_theme",
+            "last_directory"
+        ]
+        
+        for key in session_keys:
+            value = persistent_data.get(key)
+            if value:
+                page.session.set(key, value)
+                self.logger.info(f"Initialized session '{key}' = '{value}' from persistent.json")
         
         # Set window dimensions
         page.window.height = window_height

@@ -53,10 +53,9 @@ class HomeView(BaseView):
                     height=8,
                 ),
                 ft.Image(
-                    src='logo_for_subsplus.png',  # Updated to Grinnell College Libraries logo
+                    src='Primary_Libraries.png',  # Updated to Grinnell College Libraries logo
                     fit=ft.ImageFit.CONTAIN,
                     width=400,
-                    # height = 300
                 ),
                 ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍", color=colors['secondary_text']),
                 ft.Text("Manage Digital Ingest: a Flet Multi-Page App", size=35),

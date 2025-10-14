@@ -6,12 +6,282 @@ This module contains the DerivativesView class for creating file derivatives.
 
 import flet as ft
 from views.base_view import BaseView
+import os
+from subprocess import call
+from thumbnail import generate_thumbnail, generate_pdf_thumbnail
 
 
 class DerivativesView(BaseView):
     """
     Derivatives view class for derivative creation operations.
     """
+    
+    def __init__(self, page: ft.Page):
+        """Initialize the derivatives view."""
+        super().__init__(page)
+        self.log_view = None
+        self.processing = False
+    
+    def create_single_derivative(self, file_path, mode, derivative_type='thumbnail'):
+        """
+        Create a single derivative for a file based on mode and type.
+        
+        Args:
+            file_path: Path to the source file
+            mode: Mode to use ('Alma' or 'CollectionBuilder')
+            derivative_type: Type of derivative ('thumbnail' or 'small')
+            
+        Returns:
+            tuple: (success: bool, result: str)
+        """
+        try:
+            # Check for spaces in the file path
+            if any(char.isspace() for char in file_path):
+                error_msg = f"File path '{file_path}' contains spaces! This should not happen with temp files."
+                self.logger.error(error_msg)
+                return False, error_msg
+            
+            # Parse file path components
+            dirname, basename = os.path.split(file_path)
+            root, ext = os.path.splitext(basename)
+            
+            self.logger.info(f"Processing file: {file_path}")
+            self.logger.info(f"Directory: {dirname}, Basename: {basename}, Root: {root}, Extension: {ext}")
+            
+            if mode == 'Alma':
+                # Alma mode - create thumbnail only with _TN.jpg extension
+                derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                self.logger.info(f"Alma derivative path: {derivative_path}")
+                
+                # Define options for Alma thumbnails
+                options = {
+                    'trim': False,
+                    'height': 200,
+                    'width': 200,
+                    'quality': 85,
+                    'type': 'thumbnail'
+                }
+                
+                # Process based on file type
+                if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                    success = generate_thumbnail(file_path, derivative_path, options)
+                    if success:
+                        self.logger.info(f"Created Alma thumbnail: {derivative_path}")
+                        return True, derivative_path
+                    else:
+                        error_msg = f"Failed to create Alma thumbnail: {derivative_path}"
+                        self.logger.error(error_msg)
+                        return False, error_msg
+                elif ext.lower() == '.pdf':
+                    success = generate_pdf_thumbnail(file_path, derivative_path, options)
+                    if success:
+                        self.logger.info(f"Created Alma PDF thumbnail: {derivative_path}")
+                        return True, derivative_path
+                    else:
+                        error_msg = f"Failed to create PDF thumbnail: {derivative_path}"
+                        self.logger.error(error_msg)
+                        return False, error_msg
+                else:
+                    error_msg = f"Unsupported file type for Alma: {ext}"
+                    self.logger.error(error_msg)
+                    return False, error_msg
+            
+            elif mode == 'CollectionBuilder':
+                # CollectionBuilder mode - create thumbnail or small
+                if derivative_type == 'thumbnail':
+                    derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                    self.logger.info(f"CollectionBuilder thumbnail path: {derivative_path}")
+                    options = {
+                        'trim': False,
+                        'height': 400,
+                        'width': 400,
+                        'quality': 85,
+                        'type': 'thumbnail'
+                    }
+                elif derivative_type == 'small':
+                    derivative_path = os.path.join(dirname, f"{root}_SMALL.jpg")
+                    self.logger.info(f"CollectionBuilder small path: {derivative_path}")
+                    options = {
+                        'trim': False,
+                        'height': 800,
+                        'width': 800,
+                        'quality': 85,
+                        'type': 'thumbnail'
+                    }
+                else:
+                    error_msg = f"Unknown derivative type for CollectionBuilder: {derivative_type}"
+                    self.logger.error(error_msg)
+                    return False, error_msg
+                
+                # Process based on file type
+                if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                    success = generate_thumbnail(file_path, derivative_path, options)
+                    if success:
+                        self.logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
+                        return True, derivative_path
+                    else:
+                        error_msg = f"Failed to create CollectionBuilder {derivative_type}: {derivative_path}"
+                        self.logger.error(error_msg)
+                        return False, error_msg
+                elif ext.lower() == '.pdf':
+                    success = generate_pdf_thumbnail(file_path, derivative_path, options)
+                    if success:
+                        self.logger.info(f"Created CollectionBuilder {derivative_type} from PDF: {derivative_path}")
+                        return True, derivative_path
+                    else:
+                        error_msg = f"Failed to create PDF {derivative_type}: {derivative_path}"
+                        self.logger.error(error_msg)
+                        return False, error_msg
+                else:
+                    error_msg = f"Unsupported file type for CollectionBuilder: {ext}"
+                    self.logger.error(error_msg)
+                    return False, error_msg
+            else:
+                error_msg = f"Unsupported mode: {mode}"
+                self.logger.error(error_msg)
+                return False, error_msg
+                
+        except Exception as e:
+            error_msg = f"Exception in create_single_derivative: {str(e)}"
+            self.logger.error(error_msg)
+            return False, error_msg
+    
+    def create_derivatives_for_files(self):
+        """Process all selected files and create derivatives."""
+        colors = self.get_theme_colors()
+        
+        # Get current settings
+        current_mode = self.page.session.get("selected_mode")
+        selected_files = self.page.session.get("selected_file_paths") or []
+        total_files = len(selected_files)
+        
+        if not current_mode:
+            self.log_view.controls.clear()
+            self.log_view.controls.append(ft.Text(
+                "❌ No mode selected. Please go to Settings first.",
+                size=12,
+                color=colors['error']
+            ))
+            self.page.update()
+            return
+        
+        if not selected_files:
+            self.log_view.controls.clear()
+            self.log_view.controls.append(ft.Text(
+                "❌ No files selected. Please go to File Selector first.",
+                size=12,
+                color=colors['error']
+            ))
+            self.page.update()
+            return
+        
+        # Start processing
+        msg = f"Starting derivative creation for {total_files} files in {current_mode} mode"
+        self.logger.info(msg)
+        self.log_view.controls.clear()
+        self.log_view.controls.append(ft.Text(msg, size=12, color=colors['primary_text']))
+        
+        self.log_view.controls.append(ft.Text(
+            f"🔄 Processing {total_files} files in {current_mode} mode...",
+            size=12,
+            color=colors['primary_text']
+        ))
+        self.page.update()
+        
+        processed_count = 0
+        success_count = 0
+        error_count = 0
+        
+        for index, file_path in enumerate(selected_files):
+            try:
+                display_name = os.path.basename(file_path)
+                self.logger.info(f"Processing file {index + 1}/{total_files}: {file_path}")
+                
+                # Update log
+                self.log_view.controls.append(ft.Text(
+                    f"🔄 Processing file {index + 1}/{total_files}: {display_name}",
+                    size=12,
+                    color=colors['primary_text']
+                ))
+                self.page.update()
+                
+                # Create derivatives based on mode
+                if current_mode == "CollectionBuilder":
+                    # Create thumbnail
+                    thumbnail_success, thumbnail_result = self.create_single_derivative(
+                        file_path, current_mode, 'thumbnail'
+                    )
+                    
+                    # Create small derivative
+                    small_success, small_result = self.create_single_derivative(
+                        file_path, current_mode, 'small'
+                    )
+                    
+                    # Log results
+                    if thumbnail_success and small_success:
+                        result_text = f"✅ {display_name} - Created thumbnail and small derivatives"
+                        success_count += 1
+                        self.logger.info(f"Successfully created derivatives for {file_path}")
+                    else:
+                        result_text = f"❌ {display_name} - Failed to create derivatives"
+                        if not thumbnail_success:
+                            self.logger.error(f"Thumbnail failed: {thumbnail_result}")
+                        if not small_success:
+                            self.logger.error(f"Small derivative failed: {small_result}")
+                        error_count += 1
+                        
+                elif current_mode == "Alma":
+                    # Create thumbnail only for Alma
+                    thumbnail_success, thumbnail_result = self.create_single_derivative(
+                        file_path, current_mode, 'thumbnail'
+                    )
+                    
+                    if thumbnail_success:
+                        result_text = f"✅ {display_name} - Created thumbnail derivative"
+                        success_count += 1
+                        self.logger.info(f"Successfully created thumbnail for {file_path}")
+                    else:
+                        result_text = f"❌ {display_name} - Failed to create thumbnail"
+                        self.logger.error(f"Thumbnail failed: {thumbnail_result}")
+                        error_count += 1
+                else:
+                    result_text = f"❌ {display_name} - Unsupported mode: {current_mode}"
+                    error_count += 1
+                    self.logger.error(f"Unsupported mode {current_mode} for file {file_path}")
+                
+                # Add result to UI
+                self.log_view.controls.append(
+                    ft.Text(result_text, size=12, color=colors['primary_text'])
+                )
+                self.page.update()
+                processed_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                error_text = f"❌ {display_name} - Error: {str(e)}"
+                self.log_view.controls.append(
+                    ft.Text(error_text, size=12, color=colors['error'])
+                )
+                self.logger.error(f"Exception processing {file_path}: {str(e)}")
+                self.page.update()
+            
+            # Update progress
+            self.log_view.controls.append(
+                ft.Text(
+                    f"Progress: {index + 1}/{total_files} files ({(index + 1)/total_files:.0%})",
+                    size=12,
+                    color=colors['primary_text']
+                )
+            )
+            self.page.update()
+        
+        # Final summary
+        summary_text = f"\n✅ Processing complete!\nTotal: {total_files} | Success: {success_count} | Errors: {error_count}"
+        self.log_view.controls.append(
+            ft.Text(summary_text, size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+        )
+        self.page.update()
+        self.logger.info(summary_text)
     
     def render(self) -> ft.Column:
         """
@@ -27,7 +297,7 @@ class DerivativesView(BaseView):
         
         # Get current mode and files from session
         current_mode = self.page.session.get("selected_mode")
-        selected_files = self.page.session.get("selected_files") or []
+        selected_files = self.page.session.get("selected_file_paths") or []
         total_files = len(selected_files)
         
         # Prepare status information controls
@@ -39,49 +309,98 @@ class DerivativesView(BaseView):
         ]
         
         status_info_controls.extend([
+            ft.Container(height=5),
             ft.Text("Derivative Types:", size=14, weight=ft.FontWeight.BOLD, color=colors['container_text']),
-            ft.Text("• CollectionBuilder: _TN.jpg + _SMALL.jpg derivatives", 
+            ft.Text("• CollectionBuilder: _TN.jpg (400x400) + _SMALL.jpg (800x800)", 
                    size=12, color=colors['container_text']),
-            ft.Text("• Alma: .jpg.clientThumb derivative (renamed after creation)", 
+            ft.Text("• Alma: _TN.jpg (200x200) thumbnail", 
                    size=12, color=colors['container_text'])
         ])
         
+        # Create log view
+        self.log_view = ft.ListView(
+            spacing=2,
+            padding=5,
+            height=300,
+            expand=True,
+            auto_scroll=True
+        )
+        
+        # Add initial message
+        if not current_mode:
+            self.log_view.controls.append(
+                ft.Text("⚠️ Please select a mode in Settings before creating derivatives.",
+                       size=12, color=colors['secondary_text'])
+            )
+        elif total_files == 0:
+            self.log_view.controls.append(
+                ft.Text("⚠️ Please select files in File Selector before creating derivatives.",
+                       size=12, color=colors['secondary_text'])
+            )
+        else:
+            self.log_view.controls.append(
+                ft.Text(f"Ready to create derivatives for {total_files} files in {current_mode} mode.",
+                       size=12, color=colors['primary_text'])
+            )
+        
         def on_create_derivatives_click(e):
-            """Handle the create derivatives button click"""
-            # TODO: Implement derivative creation logic
-            self.logger.info("Create derivatives functionality to be implemented")
+            """Handle the create derivatives button click."""
+            self.create_derivatives_for_files()
+        
+        def on_clear_results_click(e):
+            """Clear the results log."""
+            self.log_view.controls.clear()
+            self.log_view.controls.append(
+                ft.Text("Log cleared. Ready to process files.",
+                       size=12, color=colors['secondary_text'])
+            )
+            self.page.update()
+            self.logger.info("Cleared derivatives log")
         
         # Create the UI layout
         return ft.Column([
-            ft.Text("Derivatives Creation", size=24, weight=ft.FontWeight.BOLD),
-            ft.Divider(height=20, color=colors['divider']),
+            ft.Row([
+                ft.Text("Derivatives Creation", size=24, weight=ft.FontWeight.BOLD),
+                self.create_log_button("Show Logs", ft.Icons.LIST_ALT)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            ft.Divider(height=15, color=colors['divider']),
             
             # Status information
             ft.Container(
-                content=ft.Column(status_info_controls),
-                padding=ft.padding.all(15),
+                content=ft.Column(status_info_controls, spacing=2),
+                padding=ft.padding.all(10),
                 border=ft.border.all(1, colors['border']),
                 border_radius=10,
                 bgcolor=colors['container_bg'],
-                margin=ft.margin.symmetric(vertical=10)
+                margin=ft.margin.symmetric(vertical=5)
             ),
             
             # Control buttons
             ft.Row([
                 ft.ElevatedButton(
                     "Create Derivatives",
+                    icon=ft.Icons.AUTO_FIX_HIGH,
                     on_click=on_create_derivatives_click,
                     disabled=(not current_mode or total_files == 0)
                 ),
                 ft.ElevatedButton(
                     "Clear Results",
-                    on_click=lambda e: self.logger.info("Clear results clicked")
+                    icon=ft.Icons.CLEAR,
+                    on_click=on_clear_results_click
                 )
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
             
-            ft.Divider(height=10, color=colors['divider']),
+            ft.Container(height=5),
             
-            ft.Text("TODO: Migrate full derivative creation functionality from original code.",
-                   size=14, color=colors['secondary_text'])
+            # Log view
+            ft.Text("Processing Log:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+            ft.Container(height=5),
+            ft.Container(
+                content=self.log_view,
+                border=ft.border.all(1, colors['border']),
+                border_radius=5,
+                padding=2,
+                expand=True
+            )
             
-        ], alignment="center")
+        ], alignment="start", expand=True, spacing=0, scroll=ft.ScrollMode.AUTO)

@@ -173,8 +173,8 @@ class FilePickerSelectorView(FileSelectorView):
         
         # Create a list view for selected files
         self.selected_files_list = ft.ListView(
-            spacing=5,
-            padding=10,
+            spacing=0,
+            padding=2,
             height=300,
             expand=True
         )
@@ -187,24 +187,28 @@ class FilePickerSelectorView(FileSelectorView):
                 import os
                 self.selected_files_list.controls.append(
                     ft.ListTile(
-                        leading=ft.Icon(ft.Icons.DESCRIPTION),
-                        title=ft.Text(os.path.basename(file_path)),
-                        subtitle=ft.Text(file_path, size=12, color=colors['secondary_text'])
+                        leading=ft.Icon(ft.Icons.DESCRIPTION, size=14),
+                        title=ft.Text(os.path.basename(file_path), size=14),
+                        subtitle=ft.Text(file_path, size=11, color=colors['secondary_text']),
+                        dense=True,
+                        content_padding=ft.padding.symmetric(horizontal=5, vertical=0)
+                        )
                     )
-                )
+            self.page.update()
         
         return ft.Column([
             ft.Row([
                 ft.Text(f"File Selector - {self.selector_type}", size=24, weight=ft.FontWeight.BOLD),
                 self.create_log_button("Show Logs", ft.Icons.LIST_ALT)
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Container(height=15),
+            # ft.Container(height=8),
+            ft.Divider(height=15, color=colors['divider']),
             ft.Text("Select image or PDF files from your local file system.",
                    size=16, color=colors['primary_text']),
-            ft.Container(height=10),
+            ft.Container(height=5),
             ft.Text(f"Last directory: {last_dir if last_dir else 'None'}", 
                    size=12, color=colors['secondary_text'], italic=True),
-            ft.Container(height=15),
+            ft.Container(height=8),
             ft.Row([
                 ft.ElevatedButton(
                     "Open File Picker",
@@ -217,15 +221,16 @@ class FilePickerSelectorView(FileSelectorView):
                     on_click=lambda e: self.clear_selection()
                 )
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
-            ft.Container(height=15),
+            ft.Container(height=8),
             ft.Text("Selected Files:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+            ft.Container(height=5),
             ft.Container(
                 content=self.selected_files_list,
                 border=ft.border.all(1, colors['border']),
                 border_radius=5,
-                padding=5
+                padding=2
             )
-        ], alignment="start", expand=True, scroll=ft.ScrollMode.AUTO)
+        ], alignment="start", expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
     
     def update_file_list(self):
         """Update the displayed list of selected files."""
@@ -237,9 +242,11 @@ class FilePickerSelectorView(FileSelectorView):
                 import os
                 self.selected_files_list.controls.append(
                     ft.ListTile(
-                        leading=ft.Icon(ft.Icons.DESCRIPTION),
-                        title=ft.Text(os.path.basename(file.path)),
-                        subtitle=ft.Text(file.path, size=12, color=colors['secondary_text'])
+                        leading=ft.Icon(ft.Icons.DESCRIPTION, size=14),
+                        title=ft.Text(os.path.basename(file.path), size=14),
+                        subtitle=ft.Text(file.path, size=11, color=colors['secondary_text']),
+                        dense=True,
+                        content_padding=ft.padding.symmetric(horizontal=5, vertical=0)
                     )
                 )
             
