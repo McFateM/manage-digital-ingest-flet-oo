@@ -10,6 +10,7 @@ This module contains the base FileSelectorView class and three specific implemen
 import flet as ft
 from views.base_view import BaseView
 import os
+import utils
 
 
 class FileSelectorView(BaseView):
@@ -592,47 +593,29 @@ class CSVSelectorView(FileSelectorView):
         # === STEP 3: Processing Results ===
         if current_selected_column:
             selected_files = self.page.session.get("selected_file_paths") or []
-            file_count = len(selected_files)
+            extracted_filename_count = len(selected_files)
             
             results_content = ft.Column([
                 ft.Text("Step 3: Processing Results", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.Text(f"✅ Selected column: {current_selected_column}", size=14, color=colors['primary_text']),
-                ft.Text(f"📁 Extracted {file_count} filenames from this column", size=12, color=colors['secondary_text']),
+                ft.Text(f"📁 Extracted {extracted_filename_count} filenames from this column", size=12, color=colors['secondary_text']),
             ], spacing=10)
-            
-            # Show extracted filenames
-            if selected_files and len(selected_files) > 0:
-                results_content.controls.extend([
-                    ft.Container(height=10),
-                    ft.Text("Extracted filenames:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
-                ])
-                
-                filename_list = ft.ListView([
-                    ft.Text(f"{i+1}. {filename}", size=11, color=colors['secondary_text'])
-                    for i, filename in enumerate(selected_files)
-                ], spacing=2, height=min(200, len(selected_files) * 20 + 20))
-                
-                results_content.controls.append(
-                    ft.Container(
-                        content=filename_list,
-                        border=ft.border.all(1, colors['border']),
-                        border_radius=5,
-                        padding=10,
-                        margin=ft.margin.symmetric(vertical=5)
-                    )
-                )
             
             self.results_display_container.content = ft.ExpansionTile(
                 title=ft.Text("Processing Results", weight=ft.FontWeight.BOLD),
-                subtitle=ft.Text(f"{file_count} filenames extracted"),
+                subtitle=ft.Markdown(f"{extracted_filename_count} potential filenames extracted from the `{current_selected_column}` column"),
                 leading=ft.Icon(ft.Icons.CHECK_CIRCLE),
                 initially_expanded=True,
                 controls=[results_content]
             )
             
-            # === STEP 4: Fuzzy Search (Optional) ===
+            # === STEP 4: Fuzzy Search ===
+            # Check if files have been matched (full paths vs just filenames)
+            has_full_paths = any(os.path.isabs(f) for f in selected_files if f)
+            matched_file_count = len([f for f in selected_files if f and os.path.isabs(f)]) if has_full_paths else 0
+            
             search_content = ft.Column([
-                ft.Text("Step 4: Fuzzy Search (Optional)", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                ft.Text("Step 4: Fuzzy Search", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.Text("Match filenames to actual files in a directory:", size=14, color=colors['secondary_text']),
                 ft.Container(height=5),
                 ft.Text(f"Search directory: {search_directory or 'Not selected'}", 
@@ -652,15 +635,61 @@ class CSVSelectorView(FileSelectorView):
                     ) if selected_files else ft.Container(),
                 ], spacing=10),
                 ft.Container(height=10),
-                ft.Text("Note: Fuzzy search is optional. You can proceed to Derivatives without it.",
+                ft.Text("Match filenames to actual files to prepare for subsequent processing.",
                        size=11, color=colors['secondary_text'], italic=True)
             ], spacing=5)
             
+            # Add fuzzy search status indicator and matched files list
+            if has_full_paths:
+                search_content.controls.extend([
+                    ft.Container(height=10),
+                    ft.Text(f"✅ {matched_file_count} of {extracted_filename_count} files matched via fuzzy search", 
+                           size=12, color=ft.Colors.GREEN_600, weight=ft.FontWeight.BOLD)
+                ])
+                
+                # Show matched file paths
+                if selected_files and len(selected_files) > 0:
+                    search_content.controls.extend([
+                        ft.Container(height=10),
+                        ft.Text("Matched file paths:", 
+                               size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+                    ])
+                    
+                    # Display matched files with full paths
+                    display_items = []
+                    for i, filepath in enumerate(selected_files):
+                        if os.path.isabs(filepath):
+                            display_text = f"{i+1}. {os.path.basename(filepath)} → {filepath}"
+                        else:
+                            display_text = f"{i+1}. {filepath}"
+                        display_items.append(ft.Text(display_text, size=11, color=colors['secondary_text']))
+                    
+                    filename_list = ft.ListView(
+                        display_items,
+                        spacing=2, 
+                        height=min(200, len(selected_files) * 20 + 20)
+                    )
+                    
+                    search_content.controls.append(
+                        ft.Container(
+                            content=filename_list,
+                            border=ft.border.all(1, colors['border']),
+                            border_radius=5,
+                            padding=10,
+                            margin=ft.margin.symmetric(vertical=5)
+                        )
+                    )
+            else:
+                search_content.controls.append(
+                    ft.Text("⚠️ Files not yet matched", 
+                           size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD)
+                )
+            
             self.search_container.content = ft.ExpansionTile(
                 title=ft.Text("Fuzzy Search", weight=ft.FontWeight.BOLD),
-                subtitle=ft.Text("Optional: Match filenames to actual files"),
+                subtitle=ft.Text("Match filenames to actual files"),
                 leading=ft.Icon(ft.Icons.SEARCH),
-                initially_expanded=False,
+                initially_expanded=True,
                 controls=[search_content]
             )
         
@@ -784,16 +813,143 @@ class CSVSelectorView(FileSelectorView):
             self.update_csv_display()
     
     def do_fuzzy_search(self, e):
-        """Perform fuzzy search (placeholder - to be implemented with utils)."""
+        """Perform fuzzy search using utils.perform_fuzzy_search_batch."""
         search_dir = self.page.session.get("search_directory")
         selected_files = self.page.session.get("selected_file_paths") or []
         
-        if search_dir and selected_files:
-            self.logger.info(f"Starting fuzzy search in {search_dir} for {len(selected_files)} files")
-            self.logger.warning("Fuzzy search functionality needs to be implemented with utils.perform_fuzzy_search_batch")
-            # TODO: Implement fuzzy search using utils.perform_fuzzy_search_batch
-        else:
+        if not search_dir or not selected_files:
             self.logger.error("Search directory or files not available")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Please select both a search directory and ensure files are extracted from CSV"),
+                bgcolor=ft.Colors.RED_400
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        
+        self.logger.info(f"Starting fuzzy search in {search_dir} for {len(selected_files)} files")
+        
+        # Get theme colors
+        colors = self.get_theme_colors()
+        
+        # Create progress display
+        progress_text = ft.Text("Initializing search...", size=14, color=colors['primary_text'])
+        progress_bar = ft.ProgressBar(width=400, value=0)
+        cancel_button = ft.ElevatedButton(
+            "Cancel Search",
+            icon=ft.Icons.CANCEL,
+            on_click=lambda _: self.page.session.set("cancel_search", True),
+            bgcolor=ft.Colors.RED_400
+        )
+        
+        # Create progress dialog
+        progress_dialog = ft.AlertDialog(
+            title=ft.Text("Fuzzy Search in Progress"),
+            content=ft.Column([
+                progress_text,
+                progress_bar,
+                ft.Container(height=10),
+                cancel_button
+            ], tight=True, height=150),
+            modal=True
+        )
+        
+        # Show dialog
+        self.page.overlay.append(progress_dialog)
+        progress_dialog.open = True
+        self.page.update()
+        
+        # Reset cancel flag
+        self.page.session.set("cancel_search", False)
+        
+        # Define progress callback
+        def update_progress(progress):
+            """Update progress bar and text"""
+            try:
+                files_done = int(progress * len(selected_files))
+                progress_text.value = f"Search Progress: {files_done}/{len(selected_files)} files processed ({progress:.0%})"
+                progress_bar.value = progress
+                self.logger.info(f"Progress update: {files_done}/{len(selected_files)} files ({progress:.0%})")
+                self.page.update()
+            except Exception as e:
+                self.logger.error(f"Error updating progress: {str(e)}")
+        
+        # Define cancel check
+        def check_cancel():
+            """Check if search should be cancelled"""
+            cancel = self.page.session.get("cancel_search")
+            return cancel if cancel is not None else False
+        
+        try:
+            # Perform the fuzzy search with progress tracking and cancellation support
+            results = utils.perform_fuzzy_search_batch(
+                search_dir, 
+                selected_files,
+                threshold=90,
+                progress_callback=update_progress,
+                cancel_check=check_cancel
+            )
+            
+            # Close progress dialog
+            progress_dialog.open = False
+            self.page.update()
+            
+            # If search was cancelled
+            if results is None:
+                self.logger.info("Fuzzy search was cancelled by user")
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Search cancelled by user"),
+                    bgcolor=ft.Colors.ORANGE_400
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
+            
+            # Process results and update session with matched paths
+            matched_paths = []
+            matches_found = 0
+            
+            for filename in selected_files:
+                match_path, ratio = results.get(filename, (None, 0))
+                if match_path and ratio >= 90:
+                    matched_paths.append(match_path)
+                    matches_found += 1
+                    self.logger.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
+                else:
+                    matched_paths.append(None)
+                    self.logger.info(f"No match found for '{filename}' meeting 90% threshold")
+            
+            # Update session with matched paths (replaces the original filenames)
+            self.page.session.set("selected_file_paths", [p for p in matched_paths if p is not None])
+            
+            # Log completion
+            self.logger.info(f"Fuzzy search completed. Found {matches_found} matches out of {len(selected_files)} files")
+            
+            # Show success message
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Search Complete: Found {matches_found} matches out of {len(selected_files)} files"),
+                bgcolor=ft.Colors.GREEN_400
+            )
+            self.page.snack_bar.open = True
+            
+            # Refresh the display to show updated results
+            self.update_csv_display()
+            
+        except Exception as e:
+            # Close progress dialog on error
+            progress_dialog.open = False
+            self.page.update()
+            
+            error_msg = f"Error during search: {str(e)}"
+            self.logger.error(f"Error during fuzzy search: {str(e)}")
+            
+            # Show error in snackbar
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(error_msg),
+                bgcolor=ft.Colors.RED_400
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
     
     def render(self) -> ft.Column:
         """
