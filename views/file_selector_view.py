@@ -593,7 +593,18 @@ class CSVSelectorView(FileSelectorView):
         # === STEP 3: Processing Results ===
         if current_selected_column:
             selected_files = self.page.session.get("selected_file_paths") or []
-            extracted_filename_count = len(selected_files)
+            
+            # Get original count and search statistics
+            original_count = self.page.session.get("original_filename_count")
+            search_completed = self.page.session.get("search_completed")
+            if search_completed is None:
+                search_completed = False
+            
+            # Use original count if available, otherwise current count
+            if search_completed and original_count is not None:
+                extracted_filename_count = original_count
+            else:
+                extracted_filename_count = len(selected_files)
             
             results_content = ft.Column([
                 ft.Text("Step 3: Processing Results", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
@@ -612,7 +623,21 @@ class CSVSelectorView(FileSelectorView):
             # === STEP 4: Fuzzy Search ===
             # Check if files have been matched (full paths vs just filenames)
             has_full_paths = any(os.path.isabs(f) for f in selected_files if f)
-            matched_file_count = len([f for f in selected_files if f and os.path.isabs(f)]) if has_full_paths else 0
+            
+            # Get search statistics
+            original_count = self.page.session.get("original_filename_count")
+            matched_count = self.page.session.get("matched_file_count")
+            search_completed = self.page.session.get("search_completed")
+            if search_completed is None:
+                search_completed = False
+            
+            # For display purposes
+            if search_completed and original_count is not None and matched_count is not None:
+                display_original_count = original_count
+                display_matched_count = matched_count
+            else:
+                display_original_count = extracted_filename_count
+                display_matched_count = len([f for f in selected_files if f and os.path.isabs(f)]) if has_full_paths else 0
             
             search_content = ft.Column([
                 ft.Text("Step 4: Fuzzy Search", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
@@ -641,28 +666,56 @@ class CSVSelectorView(FileSelectorView):
             
             # Add fuzzy search status indicator and matched files list
             if has_full_paths:
+                unmatched_count = display_original_count - display_matched_count
+                status_color = ft.Colors.GREEN_600 if unmatched_count == 0 else ft.Colors.ORANGE_600
+                
                 search_content.controls.extend([
                     ft.Container(height=10),
-                    ft.Text(f"✅ {matched_file_count} of {extracted_filename_count} files matched via fuzzy search", 
-                           size=12, color=ft.Colors.GREEN_600, weight=ft.FontWeight.BOLD)
+                    ft.Text(f"✅ {display_matched_count} of {display_original_count} files matched via fuzzy search", 
+                           size=12, color=status_color, weight=ft.FontWeight.BOLD)
                 ])
+                
+                # Show unmatched files warning if any
+                if unmatched_count > 0:
+                    search_content.controls.append(
+                        ft.Text(f"⚠️ {unmatched_count} files could not be matched", 
+                               size=12, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD)
+                    )
                 
                 # Show matched file paths
                 if selected_files and len(selected_files) > 0:
                     search_content.controls.extend([
                         ft.Container(height=10),
                         ft.Text("Matched file paths:", 
-                               size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+                               size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                        ft.Text("(Bold entries indicate exact matches; red entries indicate partial matches)", 
+                               size=10, color=colors['secondary_text'], italic=True)
                     ])
                     
-                    # Display matched files with full paths
+                    # Display matched files with full paths and match ratios
                     display_items = []
+                    matched_ratios = self.page.session.get("matched_ratios") or []
+                    
                     for i, filepath in enumerate(selected_files):
                         if os.path.isabs(filepath):
-                            display_text = f"{i+1}. {os.path.basename(filepath)} → {filepath}"
+                            # Get the match ratio for this file (if available)
+                            ratio = matched_ratios[i] if i < len(matched_ratios) else 100
+                            display_text = f"{i+1}. {os.path.basename(filepath)} → {filepath} ({ratio}%)"
+                            
+                            # Make text bold if match ratio is exactly 100% (exact match)
+                            # Make text red if match ratio is less than 100% (partial match)
+                            if ratio == 100:
+                                display_items.append(
+                                    ft.Text(display_text, size=11, color=colors['secondary_text'], 
+                                           weight=ft.FontWeight.BOLD)
+                                )
+                            else:
+                                display_items.append(
+                                    ft.Text(display_text, size=11, color=ft.Colors.RED_600)
+                                )
                         else:
                             display_text = f"{i+1}. {filepath}"
-                        display_items.append(ft.Text(display_text, size=11, color=colors['secondary_text']))
+                            display_items.append(ft.Text(display_text, size=11, color=colors['secondary_text']))
                     
                     filename_list = ft.ListView(
                         display_items,
@@ -679,11 +732,50 @@ class CSVSelectorView(FileSelectorView):
                             margin=ft.margin.symmetric(vertical=5)
                         )
                     )
+                
+                # Show unmatched filenames if any
+                unmatched_filenames = self.page.session.get("unmatched_filenames") or []
+                if unmatched_filenames and len(unmatched_filenames) > 0:
+                    search_content.controls.extend([
+                        ft.Container(height=10),
+                        ft.Text("Unmatched filenames:", 
+                               size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_600)
+                    ])
+                    
+                    # Display unmatched filenames
+                    unmatched_items = []
+                    for i, filename in enumerate(unmatched_filenames):
+                        unmatched_items.append(
+                            ft.Text(f"{i+1}. {filename}", size=11, color=ft.Colors.RED_400)
+                        )
+                    
+                    unmatched_list = ft.ListView(
+                        unmatched_items,
+                        spacing=2, 
+                        height=min(150, len(unmatched_filenames) * 20 + 20)
+                    )
+                    
+                    search_content.controls.append(
+                        ft.Container(
+                            content=unmatched_list,
+                            border=ft.border.all(1, ft.Colors.RED_200),
+                            border_radius=5,
+                            padding=10,
+                            margin=ft.margin.symmetric(vertical=5),
+                            bgcolor=ft.Colors.RED_50
+                        )
+                    )
             else:
-                search_content.controls.append(
-                    ft.Text("⚠️ Files not yet matched", 
-                           size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD)
-                )
+                if search_completed:
+                    search_content.controls.append(
+                        ft.Text("⚠️ Search completed but no matches found", 
+                               size=12, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD)
+                    )
+                else:
+                    search_content.controls.append(
+                        ft.Text("⚠️ Files not yet matched", 
+                               size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD)
+                    )
             
             self.search_container.content = ft.ExpansionTile(
                 title=ft.Text("Fuzzy Search", weight=ft.FontWeight.BOLD),
@@ -749,6 +841,11 @@ class CSVSelectorView(FileSelectorView):
             # Clear previous selections
             self.page.session.set("selected_csv_column", None)
             self.page.session.set("selected_file_paths", [])
+            self.page.session.set("original_filename_count", None)
+            self.page.session.set("matched_file_count", None)
+            self.page.session.set("matched_ratios", None)
+            self.page.session.set("unmatched_filenames", None)
+            self.page.session.set("search_completed", False)
             
             self.update_csv_display()
         else:
@@ -762,6 +859,11 @@ class CSVSelectorView(FileSelectorView):
         self.page.session.set("csv_read_error", None)
         self.page.session.set("selected_file_paths", [])
         self.page.session.set("search_directory", None)
+        self.page.session.set("original_filename_count", None)
+        self.page.session.set("matched_file_count", None)
+        self.page.session.set("matched_ratios", None)
+        self.page.session.set("unmatched_filenames", None)
+        self.page.session.set("search_completed", False)
         self.logger.info("Cleared CSV selection")
         self.update_csv_display()
     
@@ -786,6 +888,13 @@ class CSVSelectorView(FileSelectorView):
         selected_col = e.control.value
         self.page.session.set("selected_csv_column", selected_col)
         self.logger.info(f"Selected column: {selected_col}")
+        
+        # Clear search statistics when changing columns
+        self.page.session.set("original_filename_count", None)
+        self.page.session.set("matched_file_count", None)
+        self.page.session.set("matched_ratios", None)
+        self.page.session.set("unmatched_filenames", None)
+        self.page.session.set("search_completed", False)
         
         if selected_col:
             current_csv_file = self.page.session.get("selected_csv_file")
@@ -907,17 +1016,29 @@ class CSVSelectorView(FileSelectorView):
             
             # Process results and update session with matched paths
             matched_paths = []
+            matched_ratios = []
+            unmatched_filenames = []
             matches_found = 0
+            original_count = len(selected_files)
             
             for filename in selected_files:
                 match_path, ratio = results.get(filename, (None, 0))
                 if match_path and ratio >= 90:
                     matched_paths.append(match_path)
+                    matched_ratios.append(ratio)
                     matches_found += 1
                     self.logger.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
                 else:
                     matched_paths.append(None)
+                    unmatched_filenames.append(filename)
                     self.logger.info(f"No match found for '{filename}' meeting 90% threshold")
+            
+            # Store search statistics for UI display
+            self.page.session.set("original_filename_count", original_count)
+            self.page.session.set("matched_file_count", matches_found)
+            self.page.session.set("matched_ratios", matched_ratios)
+            self.page.session.set("unmatched_filenames", unmatched_filenames)
+            self.page.session.set("search_completed", True)
             
             # Update session with matched paths (replaces the original filenames)
             self.page.session.set("selected_file_paths", [p for p in matched_paths if p is not None])
