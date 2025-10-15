@@ -570,7 +570,7 @@ def create_derivative(page, mode, derivative_type, index, url, local_storage_pat
 
         # If original is a PDF...
         elif ext.lower( ) == '.pdf':
-            cmd = 'magick convert ' + sanitized + '[0] ' + derivative_path
+            cmd = 'magick ' + sanitized + '[0] ' + derivative_path
             call(cmd, shell=True)
             utils.show_message(page, f"Created thumbnail for '{sanitized}'")
 
@@ -627,7 +627,7 @@ def create_derivative(page, mode, derivative_type, index, url, local_storage_pat
     
         # If original is a PDF...
         elif ext.lower( ) == '.pdf':
-            cmd = 'magick convert ' + sanitized + '[0] ' + derivative_path
+            cmd = 'magick ' + sanitized + '[0] ' + derivative_path
             utils.show_message(page, f"Calling '{cmd}' to create a '{derivative_type}' derivative for '{sanitized}'")
             
             return_code = call(cmd, shell=True)

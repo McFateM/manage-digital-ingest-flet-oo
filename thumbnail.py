@@ -34,12 +34,12 @@ def generate_thumbnail(input_path, output_path, options):
         quality = options.get('quality', 85)
         trim = options.get('trim', False)
         
-        # Build the ImageMagick convert command
+        # Build the ImageMagick command
         # Use -thumbnail for faster processing and automatic orientation
         if trim:
-            cmd = f'magick convert "{input_path}" -trim -thumbnail {width}x{height} -quality {quality} "{output_path}"'
+            cmd = f'magick "{input_path}" -trim -thumbnail {width}x{height} -quality {quality} "{output_path}"'
         else:
-            cmd = f'magick convert "{input_path}" -thumbnail {width}x{height} -quality {quality} "{output_path}"'
+            cmd = f'magick "{input_path}" -thumbnail {width}x{height} -quality {quality} "{output_path}"'
         
         logger.info(f"Executing thumbnail command: {cmd}")
         
@@ -80,7 +80,7 @@ def generate_pdf_thumbnail(input_path, output_path, options):
         quality = options.get('quality', 85)
         
         # Build command for PDF - extract first page and resize
-        cmd = f'magick convert "{input_path}[0]" -thumbnail {width}x{height} -quality {quality} "{output_path}"'
+        cmd = f'magick "{input_path}[0]" -thumbnail {width}x{height} -quality {quality} "{output_path}"'
         
         logger.info(f"Executing PDF thumbnail command: {cmd}")
         

@@ -81,10 +81,10 @@ class FileSelectorView(BaseView):
     
     def copy_files_to_temp_directory(self, file_paths):
         """
-        Copy selected files to a temporary directory under storage/temp with sanitized names.
+        Create symbolic links with sanitized names in a temporary directory that reference the original files.
         
         Args:
-            file_paths: List of file paths to copy
+            file_paths: List of file paths to link
             
         Returns:
             tuple: (temp_file_paths: list, temp_file_info: list, temp_directory: str)
@@ -131,8 +131,8 @@ class FileSelectorView(BaseView):
                         temp_file_path = os.path.join(temp_dir, sanitized_filename)
                         counter += 1
                     
-                    # Copy the file
-                    shutil.copy2(original_path, temp_file_path)
+                    # Create symbolic link instead of copying the file
+                    os.symlink(os.path.abspath(original_path), temp_file_path)
                     
                     # Store the paths and info
                     temp_file_paths.append(temp_file_path)
@@ -143,10 +143,10 @@ class FileSelectorView(BaseView):
                         'sanitized_filename': sanitized_filename
                     })
                     
-                    self.logger.info(f"Copied '{original_filename}' to '{sanitized_filename}' in temp directory")
+                    self.logger.info(f"Created symbolic link '{sanitized_filename}' -> '{original_path}' in temp directory")
                     
                 except Exception as e:
-                    self.logger.error(f"Failed to copy file {original_path}: {str(e)}")
+                    self.logger.error(f"Failed to create symbolic link for file {original_path}: {str(e)}")
                     continue
             
             # Store in session
@@ -154,11 +154,11 @@ class FileSelectorView(BaseView):
             self.page.session.set("temp_files", temp_file_paths)
             self.page.session.set("temp_file_info", temp_file_info)
             
-            self.logger.info(f"Successfully copied {len(temp_file_paths)} files to temporary directory")
+            self.logger.info(f"Successfully created {len(temp_file_paths)} symbolic links in temporary directory")
             return temp_file_paths, temp_file_info, temp_dir
             
         except Exception as e:
-            self.logger.error(f"Failed to create temporary directory or copy files: {str(e)}")
+            self.logger.error(f"Failed to create temporary directory or symbolic links: {str(e)}")
             return [], [], None
     
     def clear_temp_directory(self):
@@ -176,233 +176,77 @@ class FileSelectorView(BaseView):
         self.page.session.set("temp_files", [])
         self.page.session.set("temp_file_info", [])
     
-    def create_derivatives_for_temp_files(self):
+    def render(self) -> ft.Column:
         """
-        Create derivatives for all files in the temporary directory.
-        This method integrates with the existing derivatives system.
+        Render the file selector view content.
+        This base implementation should be overridden by subclasses.
         
         Returns:
-            tuple: (success_count: int, error_count: int, total_files: int)
+            ft.Column: The file selector page layout
         """
-        # Get current mode and temp files
-        current_mode = self.page.session.get("selected_mode")
-        temp_files = self.page.session.get("temp_files") or []
-        temp_dir = self.page.session.get("temp_directory")
+        self.on_view_enter()
         
-        if not current_mode:
-            self.logger.error("No mode selected. Please go to Settings first.")
-            return 0, 0, 0
+        # Get theme-appropriate colors
+        colors = self.get_theme_colors()
         
-        if not temp_files:
-            self.logger.error("No files in temporary directory to process.")
-            return 0, 0, 0
-        
-        if not temp_dir or not os.path.exists(temp_dir):
-            self.logger.error("Temporary directory not found.")
-            return 0, 0, 0
-        
-        self.logger.info(f"Starting derivative creation for {len(temp_files)} files in {current_mode} mode")
-        
-        success_count = 0
-        error_count = 0
-        total_files = len(temp_files)
-        
-        # Import derivative creation functions
-        try:
-            from thumbnail import generate_thumbnail, generate_pdf_thumbnail
-        except ImportError:
-            self.logger.error("Thumbnail module not available for derivative creation")
-            return 0, total_files, total_files
-        
-        for index, file_path in enumerate(temp_files):
-            try:
-                # Parse file path components
-                dirname, basename = os.path.split(file_path)
-                root, ext = os.path.splitext(basename)
-                
-                self.logger.info(f"Processing file {index + 1}/{total_files}: {file_path}")
-                
-                # Create derivatives based on mode
-                if current_mode == "CollectionBuilder":
-                    # Create thumbnail and small derivatives
-                    thumbnail_success = self._create_single_derivative(file_path, current_mode, 'thumbnail')
-                    small_success = self._create_single_derivative(file_path, current_mode, 'small')
-                    
-                    if thumbnail_success and small_success:
-                        success_count += 1
-                        self.logger.info(f"Successfully created derivatives for {basename}")
-                    else:
-                        error_count += 1
-                        self.logger.error(f"Failed to create derivatives for {basename}")
-                        
-                elif current_mode == "Alma":
-                    # Create thumbnail only for Alma
-                    thumbnail_success = self._create_single_derivative(file_path, current_mode, 'thumbnail')
-                    
-                    if thumbnail_success:
-                        success_count += 1
-                        self.logger.info(f"Successfully created thumbnail for {basename}")
-                    else:
-                        error_count += 1
-                        self.logger.error(f"Failed to create thumbnail for {basename}")
-                else:
-                    error_count += 1
-                    self.logger.error(f"Unsupported mode: {current_mode}")
-                    
-            except Exception as e:
-                error_count += 1
-                self.logger.error(f"Exception processing file {file_path}: {str(e)}")
-        
-        # Handle Alma renaming if needed
-        if current_mode == "Alma" and success_count > 0:
-            self._rename_alma_thumbnails(temp_dir)
-        
-        self.logger.info(f"Derivative creation completed. Success: {success_count}, Errors: {error_count}")
-        return success_count, error_count, total_files
+        return ft.Column([
+            ft.Text("File Selector Base View", size=24, weight=ft.FontWeight.BOLD),
+            ft.Text("This base view should be overridden by subclasses.", color=colors['secondary_text'])
+        ], alignment="start", expand=True)
+
+
+class FilePickerSelectorView(FileSelectorView):
+    """
+    File picker implementation of the file selector view.
+    Handles local file system file selection.
+    """
     
-    def _create_single_derivative(self, file_path, mode, derivative_type='thumbnail'):
-        """
-        Create a single derivative for a file based on mode and type.
-        
-        Args:
-            file_path: Path to the source file
-            mode: Mode to use ('Alma' or 'CollectionBuilder')
-            derivative_type: Type of derivative ('thumbnail' or 'small')
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
+    def __init__(self, page: ft.Page):
+        """Initialize the file picker selector view."""
+        super().__init__(page, "FilePicker")
+        self.selected_files = []
+        self.selected_files_list = None
+    
+    def load_last_directory(self):
+        """Load the last used directory from persistent storage."""
         try:
-            # Import required functions
-            from thumbnail import generate_thumbnail, generate_pdf_thumbnail
-            
-            # Parse file path components
-            dirname, basename = os.path.split(file_path)
-            root, ext = os.path.splitext(basename)
-            
-            if mode == 'Alma':
-                # Alma mode - create thumbnail only with _TN.jpg extension
-                derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
-                options = {
-                    'trim': False,
-                    'height': 200,
-                    'width': 200,
-                    'quality': 85,
-                    'type': 'thumbnail'
-                }
-                
-                # Process based on file type
-                if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                    success = generate_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created Alma thumbnail: {derivative_path}")
-                        return True
-                    else:
-                        self.logger.error(f"Failed to create Alma thumbnail: {derivative_path}")
-                        return False
-                elif ext.lower() == '.pdf':
-                    success = generate_pdf_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created Alma PDF thumbnail: {derivative_path}")
-                        return True
-                    else:
-                        self.logger.error(f"Failed to create PDF thumbnail: {derivative_path}")
-                        return False
-                else:
-                    self.logger.error(f"Unsupported file type for Alma: {ext}")
-                    return False
-            
-            elif mode == 'CollectionBuilder':
-                # CollectionBuilder mode - create thumbnail or small
-                if derivative_type == 'thumbnail':
-                    derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
-                    options = {
-                        'trim': False,
-                        'height': 400,
-                        'width': 400,
-                        'quality': 85,
-                        'type': 'thumbnail'
-                    }
-                elif derivative_type == 'small':
-                    derivative_path = os.path.join(dirname, f"{root}_SMALL.jpg")
-                    options = {
-                        'trim': False,
-                        'height': 800,
-                        'width': 800,
-                        'quality': 85,
-                        'type': 'thumbnail'
-                    }
-                else:
-                    self.logger.error(f"Unknown derivative type for CollectionBuilder: {derivative_type}")
-                    return False
-                
-                # Process based on file type
-                if ext.lower() in ['.tiff', '.tif', '.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-                    success = generate_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created CollectionBuilder {derivative_type}: {derivative_path}")
-                        return True
-                    else:
-                        self.logger.error(f"Failed to create CollectionBuilder {derivative_type}: {derivative_path}")
-                        return False
-                elif ext.lower() == '.pdf':
-                    success = generate_pdf_thumbnail(file_path, derivative_path, options)
-                    if success:
-                        self.logger.info(f"Created CollectionBuilder {derivative_type} from PDF: {derivative_path}")
-                        return True
-                    else:
-                        self.logger.error(f"Failed to create PDF {derivative_type}: {derivative_path}")
-                        return False
-                else:
-                    self.logger.error(f"Unsupported file type for CollectionBuilder: {ext}")
-                    return False
-            else:
-                self.logger.error(f"Unsupported mode: {mode}")
-                return False
-                
+            import json
+            import os
+            persistent_file = os.path.join(os.path.expanduser("~"), ".mdi_persistent.json")
+            if os.path.exists(persistent_file):
+                with open(persistent_file, 'r') as f:
+                    data = json.load(f)
+                    return data.get("last_directory")
         except Exception as e:
-            self.logger.error(f"Exception in _create_single_derivative: {str(e)}")
+            self.logger.error(f"Error loading last directory: {str(e)}")
+        return None
+    
+    def save_last_directory(self, directory):
+        """Save the last used directory to persistent storage."""
+        try:
+            import json
+            import os
+            persistent_file = os.path.join(os.path.expanduser("~"), ".mdi_persistent.json")
+            data = {}
+            if os.path.exists(persistent_file):
+                with open(persistent_file, 'r') as f:
+                    data = json.load(f)
+            
+            data["last_directory"] = directory
+            
+            with open(persistent_file, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            self.logger.error(f"Error saving last directory: {str(e)}")
+    
+    def is_image_file(self, file_path):
+        """Check if a file is an image based on its extension."""
+        try:
+            image_extensions = {'.jpg', '.jpeg', '.png', '.tiff', '.tif', '.gif', '.bmp', '.webp'}
+            return any(file_path.lower().endswith(ext) for ext in image_extensions)
+        except Exception as e:
+            self.logger.error(f"Error checking image file: {str(e)}")
             return False
-    
-    def _rename_alma_thumbnails(self, temp_dir):
-        """
-        Rename Alma thumbnails from _TN.jpg to .jpg.clientThumb format.
-        
-        Args:
-            temp_dir: The temporary directory containing the thumbnails
-        """
-        if not temp_dir or not os.path.exists(temp_dir):
-            return
-        
-        try:
-            # Find all _TN.jpg files in the temp directory
-            tn_files = []
-            for filename in os.listdir(temp_dir):
-                if filename.endswith("_TN.jpg"):
-                    tn_files.append(filename)
-            
-            renamed_count = 0
-            for tn_filename in tn_files:
-                try:
-                    # Create old and new paths
-                    old_path = os.path.join(temp_dir, tn_filename)
-                    # Replace _TN.jpg with .jpg.clientThumb
-                    new_filename = tn_filename.replace("_TN.jpg", ".jpg.clientThumb")
-                    new_path = os.path.join(temp_dir, new_filename)
-                    
-                    # Rename the file
-                    os.rename(old_path, new_path)
-                    renamed_count += 1
-                    self.logger.info(f"Renamed {tn_filename} to {new_filename}")
-                    
-                except Exception as e:
-                    self.logger.error(f"Failed to rename {tn_filename}: {str(e)}")
-            
-            if renamed_count > 0:
-                self.logger.info(f"Successfully renamed {renamed_count} Alma thumbnails to .clientThumb format")
-                
-        except Exception as e:
-            self.logger.error(f"Error during Alma thumbnail renaming: {str(e)}")
     
     def render(self) -> ft.Column:
         """
@@ -501,16 +345,15 @@ class FilePickerSelectorView(FileSelectorView):
         
         # Handler for file picker result
         def on_file_picker_result(e: ft.FilePickerResultEvent):
-            """Handle file picker result."""
+            """Handle file picker result and automatically process files."""
             if e.files:
                 self.selected_files = []
                 file_paths = []
                 
                 for file in e.files:
                     self.selected_files.append(file)
-                    # Sanitize the file path before storing
-                    sanitized_path = self.sanitize_file_path(file.path)
-                    file_paths.append(sanitized_path)
+                    # Store the original file path (don't sanitize here)
+                    file_paths.append(file.path)
                 
                 # Save the directory of the first selected file
                 if file_paths:
@@ -524,6 +367,9 @@ class FilePickerSelectorView(FileSelectorView):
                 
                 # Update the UI to show selected files
                 self.update_file_list()
+                
+                # Automatically create links
+                self.auto_perform_file_picker_workflow(file_paths)
             else:
                 self.logger.info("No files selected")
         
@@ -602,20 +448,8 @@ class FilePickerSelectorView(FileSelectorView):
                 )
             ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
             ft.Container(height=8),
-            ft.Row([
-                ft.ElevatedButton(
-                    "Copy Files to Temp",
-                    icon=ft.Icons.CONTENT_COPY,
-                    on_click=self.on_copy_files_to_temp,
-                    disabled=len(session_files or []) == 0
-                ),
-                ft.ElevatedButton(
-                    "Create Derivatives",
-                    icon=ft.Icons.AUTO_FIX_HIGH,
-                    on_click=self.on_create_derivatives,
-                    disabled=not bool(self.page.session.get("temp_files"))
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
+            ft.Text("A temporary directory of sanitized symbolic links will be populated to reference selected files.", 
+                   size=12, color=colors['secondary_text'], italic=True),
             ft.Container(height=8),
             ft.Text("Selected Files:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
             ft.Container(height=5),
@@ -682,7 +516,7 @@ class FilePickerSelectorView(FileSelectorView):
             )
         else:
             return ft.Container(
-                content=ft.Text("📁 No temporary files - use 'Copy Files to Temp' button", 
+                content=ft.Text("📁 No temporary files - select files to automatically create links", 
                                size=12, color=colors['secondary_text']),
                 padding=ft.padding.all(8),
                 border=ft.border.all(1, ft.Colors.ORANGE_200),
@@ -691,23 +525,23 @@ class FilePickerSelectorView(FileSelectorView):
             )
     
     def on_copy_files_to_temp(self, e):
-        """Handle copying files to temporary directory."""
+        """Handle creating symbolic links to files in temporary directory."""
         file_paths = self.page.session.get("selected_file_paths") or []
         if not file_paths:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("No files selected to copy"),
+                content=ft.Text("No files selected to link"),
                 bgcolor=ft.Colors.RED_400
             )
             self.page.snack_bar.open = True
             self.page.update()
             return
         
-        self.logger.info(f"Copying {len(file_paths)} files to temporary directory...")
+        self.logger.info(f"Creating symbolic links for {len(file_paths)} files in temporary directory...")
         temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(file_paths)
         
         if temp_files:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Successfully copied {len(temp_files)} files to temporary directory"),
+                content=ft.Text(f"Successfully created {len(temp_files)} symbolic links in temporary directory"),
                 bgcolor=ft.Colors.GREEN_400
             )
             self.page.snack_bar.open = True
@@ -717,80 +551,7 @@ class FilePickerSelectorView(FileSelectorView):
             self.page.go("/file_selector")
         else:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Failed to copy files to temporary directory"),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-    
-    def on_create_derivatives(self, e):
-        """Handle creating derivatives for temporary files."""
-        current_mode = self.page.session.get("selected_mode")
-        if not current_mode:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please select a mode in Settings before creating derivatives"),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
-        
-        temp_files = self.page.session.get("temp_files") or []
-        if not temp_files:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("No temporary files found. Please copy files first."),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
-        
-        self.logger.info(f"Creating derivatives for {len(temp_files)} temporary files in {current_mode} mode...")
-        
-        # Show progress dialog
-        progress_dialog = ft.AlertDialog(
-            title=ft.Text("Creating Derivatives"),
-            content=ft.Column([
-                ft.Text(f"Processing {len(temp_files)} files in {current_mode} mode..."),
-                ft.ProgressRing()
-            ], tight=True, height=100),
-            modal=True
-        )
-        
-        self.page.overlay.append(progress_dialog)
-        progress_dialog.open = True
-        self.page.update()
-        
-        try:
-            success_count, error_count, total_files = self.create_derivatives_for_temp_files()
-            
-            # Close progress dialog
-            progress_dialog.open = False
-            self.page.update()
-            
-            # Show result
-            if error_count == 0:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Successfully created derivatives for all {success_count} files"),
-                    bgcolor=ft.Colors.GREEN_400
-                )
-            else:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Created derivatives for {success_count} files, {error_count} failed"),
-                    bgcolor=ft.Colors.ORANGE_400
-                )
-            
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-        except Exception as ex:
-            # Close progress dialog on error
-            progress_dialog.open = False
-            self.page.update()
-            
-            self.logger.error(f"Error during derivative creation: {str(ex)}")
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error during derivative creation: {str(ex)}"),
+                content=ft.Text("Failed to create symbolic links in temporary directory"),
                 bgcolor=ft.Colors.RED_400
             )
             self.page.snack_bar.open = True
@@ -1035,11 +796,18 @@ class CSVSelectorView(FileSelectorView):
         self.csv_file_display.controls.clear()
         
         # === STEP 1: File Selection ===
-        file_selection_content = ft.Column([
-            # ft.Text("Step 1: Select CSV File", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-            ft.ElevatedButton("Select File", icon=ft.Icons.FILE_UPLOAD, on_click=self.open_csv_file_picker),
-        ], spacing=10)
+        # file_selection_content = ft.Column([
+        #     ft.ElevatedButton("Select CSV File", icon=ft.Icons.FILE_UPLOAD, on_click=self.open_csv_file_picker),
+        # ], spacing=10)
         
+        file_selection_content = ft.Row([
+            ft.Container(width=10),  # 10 space indentation
+            ft.Container(
+                content=ft.ElevatedButton("Select CSV File", icon=ft.Icons.FILE_UPLOAD, on_click=self.open_csv_file_picker),
+                margin=ft.margin.only(bottom=10)  # Small margin below button
+            ),
+        ], spacing=0, alignment=ft.MainAxisAlignment.START)
+
         if current_csv_file:
             import os
             filename = os.path.basename(current_csv_file)
@@ -1050,7 +818,7 @@ class CSVSelectorView(FileSelectorView):
                 ft.Row([
                     ft.ElevatedButton("Clear Selection", on_click=self.on_clear_csv_selection, scale=0.8),
                     ft.ElevatedButton("Reload File", on_click=self.reload_csv_file, scale=0.8)
-                ], alignment=ft.MainAxisAlignment.CENTER)
+                ], alignment=ft.MainAxisAlignment.START)
             ])
         
         self.file_selection_container.content = ft.ExpansionTile(
@@ -1075,13 +843,21 @@ class CSVSelectorView(FileSelectorView):
                 
                 columns_content.controls.extend([
                     # ft.Container(height=10),
-                    ft.Text("Select column containing filenames:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                    ft.Dropdown(
-                        label="Choose filename column",
-                        value=current_selected_column if current_selected_column else "",
-                        options=[ft.dropdown.Option(col) for col in current_csv_columns],
-                        on_change=self.on_column_selection_change,
-                        width=300
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Container(width=10),  # 10 space indentation
+                            ft.Column([
+                                ft.Text("Select column containing filenames:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                                ft.Dropdown(
+                                    label="Choose filename column",
+                                    value=current_selected_column if current_selected_column else "",
+                                    options=[ft.dropdown.Option(col) for col in current_csv_columns],
+                                    on_change=self.on_column_selection_change,
+                                    width=300
+                                )
+                            ], spacing=5, alignment=ft.CrossAxisAlignment.START)
+                        ], alignment=ft.MainAxisAlignment.START),
+                        margin=ft.margin.only(bottom=10)  # Small margin below control
                     )
                 ])
                 
@@ -1165,51 +941,29 @@ class CSVSelectorView(FileSelectorView):
                 display_original_count = extracted_filename_count
                 display_matched_count = len([f for f in selected_files if f and os.path.isabs(f)]) if has_full_paths else 0
             
-            search_content = ft.Column([
-                # ft.Text("Match filenames to actual files in a directory:", size=14, color=colors['secondary_text']),
-                # ft.Container(height=5),
-                ft.Text(f"Search directory: {search_directory or 'Not selected'}", 
-                       size=12, color=colors['secondary_text'], italic=True),
-                ft.Container(height=10),
-                ft.Row([
+            search_content = ft.Row([
+                ft.Container(width=10),  # 10 space indentation
+                ft.Column([
+                    ft.Text(f"Search directory: {search_directory or 'Not selected'}", 
+                           size=12, color=colors['secondary_text'], italic=True),
+                    ft.Container(height=10),
                     ft.ElevatedButton(
                         "Select Search Directory",
                         icon=ft.Icons.FOLDER_OPEN,
                         on_click=self.open_search_dir_picker
                     ),
-                    ft.ElevatedButton(
-                        "Start Fuzzy Search",
-                        icon=ft.Icons.SEARCH,
-                        on_click=self.do_fuzzy_search,
-                        disabled=not bool(search_directory)
-                    ) if selected_files else ft.Container(),
-                ], spacing=10),
-                ft.Container(height=10),
-                ft.Row([
-                    ft.ElevatedButton(
-                        "Copy Matches to Temp",
-                        icon=ft.Icons.CONTENT_COPY,
-                        on_click=self.on_copy_csv_matches_to_temp,
-                        disabled=not has_full_paths
-                    ),
-                    ft.ElevatedButton(
-                        "Create Derivatives",
-                        icon=ft.Icons.AUTO_FIX_HIGH,
-                        on_click=self.on_create_derivatives,
-                        disabled=not bool(self.page.session.get("temp_files"))
-                    )
-                ], spacing=10) if has_full_paths else ft.Container(),
-                # ft.Container(height=10),
-                # ft.Text("Match filenames to actual files to prepare for subsequent processing.",
-                #       size=11, color=colors['secondary_text'], italic=True)
-            ], spacing=5)
+                    ft.Container(height=10),
+                    ft.Text("Selecting a directory will automatically perform fuzzy search and create symbolic links to selected files.",
+                           size=11, color=colors['secondary_text'], italic=True)
+                ], spacing=5, alignment=ft.CrossAxisAlignment.START)
+            ], alignment=ft.MainAxisAlignment.START)
             
             # Add fuzzy search status indicator and matched files list
             if has_full_paths:
                 unmatched_count = display_original_count - display_matched_count
                 status_color = ft.Colors.GREEN_600 if unmatched_count == 0 else ft.Colors.ORANGE_600
                 
-                search_content.controls.extend([
+                search_content.controls[1].controls.extend([
                     ft.Container(height=10),
                     ft.Text(f"✅ {display_matched_count} of {display_original_count} files matched via fuzzy search", 
                            size=12, color=status_color, weight=ft.FontWeight.BOLD)
@@ -1217,14 +971,14 @@ class CSVSelectorView(FileSelectorView):
                 
                 # Show unmatched files warning if any
                 if unmatched_count > 0:
-                    search_content.controls.append(
+                    search_content.controls[1].controls.append(
                         ft.Text(f"⚠️ {unmatched_count} files could not be matched", 
                                size=12, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD)
                     )
                 
                 # Show matched file paths
                 if selected_files and len(selected_files) > 0:
-                    search_content.controls.extend([
+                    search_content.controls[1].controls.extend([
                         ft.Container(height=10),
                         ft.Text("Matched file paths:", 
                                size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
@@ -1263,7 +1017,7 @@ class CSVSelectorView(FileSelectorView):
                         height=min(200, len(selected_files) * 20 + 20)
                     )
                     
-                    search_content.controls.append(
+                    search_content.controls[1].controls.append(
                         ft.Container(
                             content=filename_list,
                             border=ft.border.all(1, colors['border']),
@@ -1276,7 +1030,7 @@ class CSVSelectorView(FileSelectorView):
                 # Show unmatched filenames if any
                 unmatched_filenames = self.page.session.get("unmatched_filenames") or []
                 if unmatched_filenames and len(unmatched_filenames) > 0:
-                    search_content.controls.extend([
+                    search_content.controls[1].controls.extend([
                         ft.Container(height=10),
                         ft.Text("Unmatched filenames:", 
                                size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_600)
@@ -1295,7 +1049,7 @@ class CSVSelectorView(FileSelectorView):
                         height=min(150, len(unmatched_filenames) * 20 + 20)
                     )
                     
-                    search_content.controls.append(
+                    search_content.controls[1].controls.append(
                         ft.Container(
                             content=unmatched_list,
                             border=ft.border.all(1, ft.Colors.RED_200),
@@ -1307,16 +1061,19 @@ class CSVSelectorView(FileSelectorView):
                     )
             else:
                 if search_completed:
-                    search_content.controls.append(
-                        ft.Text("⚠️ Search completed but no matches found", 
+                    search_content.controls[1].controls.append(
+                            ft.Text("⚠️ Search completed but no matches found", 
                                size=12, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD)
-                    )
+                        ), 
+
                 else:
-                    search_content.controls.append(
-                        ft.Text("⚠️ Files not yet matched", 
+                    search_content.controls[1].controls.append(
+                            ft.Text("⚠️ Files not yet matched", 
                                size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD)
-                    )
-            
+                        ),
+                    
+                # search_content.controls[1].controls.append(ft.Row(height=10))  # Spacer
+
             # Determine subtitle based on search completion status
             search_directory = self.page.session.get("search_directory")
             
@@ -1474,11 +1231,217 @@ class CSVSelectorView(FileSelectorView):
         )
     
     def on_search_dir_picker_result(self, e: ft.FilePickerResultEvent):
-        """Handle search directory selection."""
+        """Handle search directory selection and automatically perform complete workflow."""
         if e.path:
             self.page.session.set("search_directory", e.path)
             self.logger.info(f"Selected search directory: {e.path}")
             self.update_csv_display()
+            
+            # Automatically perform the complete workflow
+            self.auto_perform_workflow(e.path)
+    
+    def auto_perform_workflow(self, search_dir):
+        """Automatically perform fuzzy search and link creation."""
+        selected_files = self.page.session.get("selected_file_paths") or []
+        
+        if not selected_files:
+            self.logger.warning("No files available for automatic workflow")
+            return
+        
+        # Show progress dialog for the entire workflow
+        progress_dialog = ft.AlertDialog(
+            title=ft.Text("Processing Files"),
+            content=ft.Column([
+                ft.Text("Performing fuzzy search and creating links..."),
+                ft.ProgressRing()
+            ], tight=True, height=100),
+            modal=True
+        )
+        
+        self.page.overlay.append(progress_dialog)
+        progress_dialog.open = True
+        self.page.update()
+        
+        try:
+            # Step 1: Perform fuzzy search
+            self.logger.info(f"Auto-workflow: Starting fuzzy search for {len(selected_files)} files")
+            
+            # Call the fuzzy search logic (extracted from do_fuzzy_search)
+            results = self.perform_fuzzy_search_workflow(search_dir, selected_files)
+            
+            if results is None:  # Search was cancelled or failed
+                progress_dialog.open = False
+                self.page.update()
+                return
+            
+            # Create symbolic links for matched files
+            matched_files = self.page.session.get("selected_file_paths") or []
+            full_path_files = [f for f in matched_files if f and os.path.isabs(f) and os.path.exists(f)]
+            
+            if full_path_files:
+                self.logger.info(f"Auto-workflow: Creating symbolic links for {len(full_path_files)} matched files")
+                temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(full_path_files)
+                
+                # Close progress dialog
+                progress_dialog.open = False
+                self.page.update()
+                
+                # Show result
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Found {len(full_path_files)} matches and created links successfully. Use the Derivatives menu to generate thumbnails and other derivatives."),
+                    bgcolor=ft.Colors.GREEN_400
+                )
+            else:
+                # Close progress dialog
+                progress_dialog.open = False
+                self.page.update()
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Search completed but no file matches were found"),
+                    bgcolor=ft.Colors.ORANGE_400
+                )
+            
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            # Refresh the display
+            self.update_csv_display()
+            
+        except Exception as ex:
+            # Close progress dialog on error
+            progress_dialog.open = False
+            self.page.update()
+            
+            self.logger.error(f"Error during automatic workflow: {str(ex)}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error during automatic workflow: {str(ex)}"),
+                bgcolor=ft.Colors.RED_400
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
+    def perform_fuzzy_search_workflow(self, search_dir, selected_files):
+        """Perform the fuzzy search workflow and return results."""
+        try:
+            # Define progress callback (simplified for auto mode)
+            def update_progress(progress):
+                # Could add more detailed progress tracking here if needed
+                pass
+            
+            # Define cancel check
+            def check_cancel():
+                return False  # No cancellation in auto mode
+            
+            # Perform the fuzzy search
+            results = utils.perform_fuzzy_search_batch(
+                search_dir, 
+                selected_files,
+                threshold=90,
+                progress_callback=update_progress,
+                cancel_check=check_cancel
+            )
+            
+            if results is None:
+                return None
+            
+            # Process results (same logic as in do_fuzzy_search)
+            matched_paths = []
+            matched_ratios = []
+            unmatched_filenames = []
+            matches_found = 0
+            original_count = len(selected_files)
+            
+            for filename in selected_files:
+                match_path, ratio = results.get(filename, (None, 0))
+                if match_path and ratio >= 90:
+                    matched_paths.append(match_path)
+                    matched_ratios.append(ratio)
+                    matches_found += 1
+                    self.logger.info(f"Auto-workflow: Found match for '{filename}': {match_path} ({ratio}% match)")
+                else:
+                    matched_paths.append(None)
+                    unmatched_filenames.append(filename)
+                    self.logger.info(f"Auto-workflow: No match found for '{filename}' meeting 90% threshold")
+            
+            # Store search statistics
+            self.page.session.set("original_filename_count", original_count)
+            self.page.session.set("matched_file_count", matches_found)
+            self.page.session.set("matched_ratios", matched_ratios)
+            self.page.session.set("unmatched_filenames", unmatched_filenames)
+            self.page.session.set("search_completed", True)
+            
+            # Update session with matched paths
+            self.page.session.set("selected_file_paths", [p for p in matched_paths if p is not None])
+            
+            self.logger.info(f"Auto-workflow: Fuzzy search completed. Found {matches_found} matches out of {len(selected_files)} files")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error during automatic fuzzy search: {str(e)}")
+            return None
+    
+    def auto_perform_file_picker_workflow(self, file_paths):
+        """Automatically create links for directly selected files."""
+        if not file_paths:
+            return
+        
+        # Show progress dialog
+        progress_dialog = ft.AlertDialog(
+            title=ft.Text("Processing Files"),
+            content=ft.Column([
+                ft.Text("Creating links..."),
+                ft.ProgressRing()
+            ], tight=True, height=100),
+            modal=True
+        )
+        
+        self.page.overlay.append(progress_dialog)
+        progress_dialog.open = True
+        self.page.update()
+        
+        try:
+            # Create symbolic links
+            self.logger.info(f"Auto-workflow: Creating symbolic links for {len(file_paths)} files")
+            temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(file_paths)
+            
+            if temp_files:
+                # Close progress dialog
+                progress_dialog.open = False
+                self.page.update()
+                
+                # Show result
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Successfully created links for {len(file_paths)} files. Use the Derivatives menu to generate thumbnails and derivatives."),
+                    bgcolor=ft.Colors.GREEN_400
+                )
+            else:
+                # Close progress dialog
+                progress_dialog.open = False
+                self.page.update()
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Failed to create symbolic links for selected files"),
+                    bgcolor=ft.Colors.RED_400
+                )
+            
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            # Refresh to show updated status
+            self.page.go("/file_selector")
+            
+        except Exception as ex:
+            # Close progress dialog on error
+            progress_dialog.open = False
+            self.page.update()
+            
+            self.logger.error(f"Error during file picker automatic workflow: {str(ex)}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error during automatic processing: {str(ex)}"),
+                bgcolor=ft.Colors.RED_400
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
     
     def do_fuzzy_search(self, e):
         """Perform fuzzy search using utils.perform_fuzzy_search_batch."""
@@ -1583,12 +1546,11 @@ class CSVSelectorView(FileSelectorView):
             for filename in selected_files:
                 match_path, ratio = results.get(filename, (None, 0))
                 if match_path and ratio >= 90:
-                    # Sanitize the matched path before storing
-                    sanitized_path = self.sanitize_file_path(match_path)
-                    matched_paths.append(sanitized_path)
+                    # Store the original matched path (don't sanitize here)
+                    matched_paths.append(match_path)
                     matched_ratios.append(ratio)
                     matches_found += 1
-                    self.logger.info(f"Found match for '{filename}': {sanitized_path} ({ratio}% match)")
+                    self.logger.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
                 else:
                     matched_paths.append(None)
                     unmatched_filenames.append(filename)
@@ -1634,7 +1596,7 @@ class CSVSelectorView(FileSelectorView):
             self.page.update()
     
     def on_copy_csv_matches_to_temp(self, e):
-        """Handle copying CSV matched files to temporary directory."""
+        """Handle creating symbolic links for CSV matched files in temporary directory."""
         matched_files = self.page.session.get("selected_file_paths") or []
         
         # Filter to only include matched files (absolute paths)
@@ -1642,19 +1604,19 @@ class CSVSelectorView(FileSelectorView):
         
         if not full_path_files:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("No matched files found to copy"),
+                content=ft.Text("No matched files found to link"),
                 bgcolor=ft.Colors.RED_400
             )
             self.page.snack_bar.open = True
             self.page.update()
             return
         
-        self.logger.info(f"Copying {len(full_path_files)} matched files to temporary directory...")
+        self.logger.info(f"Creating symbolic links for {len(full_path_files)} matched files in temporary directory...")
         temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(full_path_files)
         
         if temp_files:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Successfully copied {len(temp_files)} matched files to temporary directory"),
+                content=ft.Text(f"Successfully created {len(temp_files)} symbolic links for matched files in temporary directory"),
                 bgcolor=ft.Colors.GREEN_400
             )
             self.page.snack_bar.open = True
@@ -1664,80 +1626,7 @@ class CSVSelectorView(FileSelectorView):
             self.update_csv_display()
         else:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Failed to copy matched files to temporary directory"),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-    
-    def on_create_derivatives(self, e):
-        """Handle creating derivatives for temporary files."""
-        current_mode = self.page.session.get("selected_mode")
-        if not current_mode:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Please select a mode in Settings before creating derivatives"),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
-        
-        temp_files = self.page.session.get("temp_files") or []
-        if not temp_files:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("No temporary files found. Please copy files first."),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
-        
-        self.logger.info(f"Creating derivatives for {len(temp_files)} temporary files in {current_mode} mode...")
-        
-        # Show progress dialog
-        progress_dialog = ft.AlertDialog(
-            title=ft.Text("Creating Derivatives"),
-            content=ft.Column([
-                ft.Text(f"Processing {len(temp_files)} files in {current_mode} mode..."),
-                ft.ProgressRing()
-            ], tight=True, height=100),
-            modal=True
-        )
-        
-        self.page.overlay.append(progress_dialog)
-        progress_dialog.open = True
-        self.page.update()
-        
-        try:
-            success_count, error_count, total_files = self.create_derivatives_for_temp_files()
-            
-            # Close progress dialog
-            progress_dialog.open = False
-            self.page.update()
-            
-            # Show result
-            if error_count == 0:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Successfully created derivatives for all {success_count} files"),
-                    bgcolor=ft.Colors.GREEN_400
-                )
-            else:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Created derivatives for {success_count} files, {error_count} failed"),
-                    bgcolor=ft.Colors.ORANGE_400
-                )
-            
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-        except Exception as ex:
-            # Close progress dialog on error
-            progress_dialog.open = False
-            self.page.update()
-            
-            self.logger.error(f"Error during derivative creation: {str(ex)}")
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error during derivative creation: {str(ex)}"),
+                content=ft.Text("Failed to create symbolic links for matched files in temporary directory"),
                 bgcolor=ft.Colors.RED_400
             )
             self.page.snack_bar.open = True

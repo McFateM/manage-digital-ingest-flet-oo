@@ -20,7 +20,7 @@ except ImportError:
 # Simple thumbnail generation function to replace missing thumbnail module
 def generate_pdf_thumbnail(input_path, output_path, options):
     """
-    Generate a thumbnail using ImageMagick convert command
+    Generate a thumbnail using ImageMagick
     """
     try:
         width = options.get('width', 400)
@@ -28,7 +28,7 @@ def generate_pdf_thumbnail(input_path, output_path, options):
         quality = options.get('quality', 85)
         
         # Create the command
-        cmd = f'magick convert "{input_path}" -resize {width}x{height} -quality {quality} "{output_path}"'
+        cmd = f'magick "{input_path}" -resize {width}x{height} -quality {quality} "{output_path}"'
         
         # Execute the command
         return_code = call(cmd, shell=True)
@@ -1800,7 +1800,7 @@ def derivatives_view(page):
                             logger.error(error_msg)
                             return False, error_msg
                     elif ext.lower() == '.pdf':
-                        cmd = f'magick convert "{file_path}[0]" "{derivative_path}"'
+                        cmd = f'magick "{file_path}[0]" "{derivative_path}"'
                         return_code = call(cmd, shell=True)
                         if return_code == 0:
                             logger.info(f"Created Alma PDF thumbnail: {derivative_path}")
@@ -1852,7 +1852,7 @@ def derivatives_view(page):
                             logger.error(error_msg)
                             return False, error_msg
                     elif ext.lower() == '.pdf':
-                        cmd = f'magick convert "{file_path}[0]" "{derivative_path}"'
+                        cmd = f'magick "{file_path}[0]" "{derivative_path}"'
                         return_code = call(cmd, shell=True)
                         if return_code == 0:
                             logger.info(f"Created CollectionBuilder {derivative_type} from PDF: {derivative_path}")

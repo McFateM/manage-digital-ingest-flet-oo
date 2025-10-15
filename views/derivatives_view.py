@@ -21,6 +21,7 @@ class DerivativesView(BaseView):
         super().__init__(page)
         self.log_view = None
         self.processing = False
+        self.cancel_processing = False
     
     def create_single_derivative(self, file_path, mode, derivative_type='thumbnail'):
         """
@@ -175,7 +176,14 @@ class DerivativesView(BaseView):
             self.page.update()
             return
         
+        # Update UI to show processing state
+        self.processing = True
+        self.page.go("/derivatives")  # Refresh the view to show cancel button
+        
         # Start processing
+        self.processing = True
+        self.cancel_processing = False
+        
         msg = f"Starting derivative creation for {total_files} files in {current_mode} mode"
         self.logger.info(msg)
         self.log_view.controls.clear()
@@ -193,6 +201,17 @@ class DerivativesView(BaseView):
         error_count = 0
         
         for index, file_path in enumerate(selected_files):
+            # Check for cancellation
+            if self.cancel_processing:
+                self.log_view.controls.append(ft.Text(
+                    f"⚠️ Processing cancelled by user. Processed {processed_count}/{total_files} files.",
+                    size=12,
+                    color=colors['error']
+                ))
+                self.page.update()
+                self.logger.info(f"Processing cancelled by user at file {index + 1}/{total_files}")
+                break
+                
             try:
                 display_name = os.path.basename(file_path)
                 self.logger.info(f"Processing file {index + 1}/{total_files}: {file_path}")
@@ -276,12 +295,38 @@ class DerivativesView(BaseView):
             self.page.update()
         
         # Final summary
-        summary_text = f"\n✅ Processing complete!\nTotal: {total_files} | Success: {success_count} | Errors: {error_count}"
+        if not self.cancel_processing:
+            summary_text = f"\n✅ Processing complete!\nTotal: {total_files} | Success: {success_count} | Errors: {error_count}"
+        else:
+            summary_text = f"\n⚠️ Processing cancelled!\nProcessed: {processed_count}/{total_files} | Success: {success_count} | Errors: {error_count}"
+        
         self.log_view.controls.append(
             ft.Text(summary_text, size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
         )
         self.page.update()
         self.logger.info(summary_text)
+        
+        # Reset processing state
+        self.processing = False
+        self.cancel_processing = False
+        
+        # Refresh UI to show normal buttons again
+        self.page.go("/derivatives")
+    
+    def interrupt_processing(self, e):
+        """Interrupt the current processing operation."""
+        if self.processing:
+            self.cancel_processing = True
+            self.logger.info("Processing interruption requested by user")
+            
+            # Update UI to show cancellation in progress
+            colors = self.get_theme_colors()
+            self.log_view.controls.append(ft.Text(
+                "🛑 Cancellation requested... stopping after current file.",
+                size=12,
+                color=colors['error']
+            ))
+            self.page.update()
     
     def render(self) -> ft.Column:
         """
@@ -347,6 +392,10 @@ class DerivativesView(BaseView):
             """Handle the create derivatives button click."""
             self.create_derivatives_for_files()
         
+        def on_interrupt_click(e):
+            """Handle the interrupt/cancel button click."""
+            self.interrupt_processing(e)
+        
         def on_clear_results_click(e):
             """Clear the results log."""
             self.log_view.controls.clear()
@@ -356,6 +405,32 @@ class DerivativesView(BaseView):
             )
             self.page.update()
             self.logger.info("Cleared derivatives log")
+        
+        # Create dynamic control buttons based on processing state
+        if self.processing:
+            control_buttons = ft.Row([
+                ft.ElevatedButton(
+                    "🛑 Cancel Processing",
+                    icon=ft.Icons.CANCEL,
+                    on_click=on_interrupt_click,
+                    bgcolor=ft.Colors.RED_600,
+                    color=ft.Colors.WHITE
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+        else:
+            control_buttons = ft.Row([
+                ft.ElevatedButton(
+                    "Create Derivatives",
+                    icon=ft.Icons.AUTO_FIX_HIGH,
+                    on_click=on_create_derivatives_click,
+                    disabled=(not current_mode or total_files == 0)
+                ),
+                ft.ElevatedButton(
+                    "Clear Results",
+                    icon=ft.Icons.CLEAR,
+                    on_click=on_clear_results_click
+                )
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
         
         # Create the UI layout
         return ft.Column([
@@ -376,19 +451,7 @@ class DerivativesView(BaseView):
             ),
             
             # Control buttons
-            ft.Row([
-                ft.ElevatedButton(
-                    "Create Derivatives",
-                    icon=ft.Icons.AUTO_FIX_HIGH,
-                    on_click=on_create_derivatives_click,
-                    disabled=(not current_mode or total_files == 0)
-                ),
-                ft.ElevatedButton(
-                    "Clear Results",
-                    icon=ft.Icons.CLEAR,
-                    on_click=on_clear_results_click
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
+            control_buttons,
             
             ft.Container(height=5),
             
