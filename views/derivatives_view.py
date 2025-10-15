@@ -46,12 +46,21 @@ class DerivativesView(BaseView):
             dirname, basename = os.path.split(file_path)
             root, ext = os.path.splitext(basename)
             
+            # Determine the base temp directory (go up one level from OBJS)
+            if dirname.endswith('OBJS'):
+                temp_base_dir = os.path.dirname(dirname)
+            else:
+                temp_base_dir = dirname
+            
             self.logger.info(f"Processing file: {file_path}")
             self.logger.info(f"Directory: {dirname}, Basename: {basename}, Root: {root}, Extension: {ext}")
+            self.logger.info(f"Temp base directory: {temp_base_dir}")
             
             if mode == 'Alma':
-                # Alma mode - create thumbnail only with _TN.jpg extension
-                derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                # Alma mode - create thumbnail only with _TN.jpg extension in TN/ directory
+                tn_dir = os.path.join(temp_base_dir, 'TN')
+                os.makedirs(tn_dir, exist_ok=True)
+                derivative_path = os.path.join(tn_dir, f"{root}_TN.jpg")
                 self.logger.info(f"Alma derivative path: {derivative_path}")
                 
                 # Define options for Alma thumbnails
@@ -88,9 +97,11 @@ class DerivativesView(BaseView):
                     return False, error_msg
             
             elif mode == 'CollectionBuilder':
-                # CollectionBuilder mode - create thumbnail or small
+                # CollectionBuilder mode - create thumbnail or small in respective directories
                 if derivative_type == 'thumbnail':
-                    derivative_path = os.path.join(dirname, f"{root}_TN.jpg")
+                    tn_dir = os.path.join(temp_base_dir, 'TN')
+                    os.makedirs(tn_dir, exist_ok=True)
+                    derivative_path = os.path.join(tn_dir, f"{root}_TN.jpg")
                     self.logger.info(f"CollectionBuilder thumbnail path: {derivative_path}")
                     options = {
                         'trim': False,
@@ -100,7 +111,9 @@ class DerivativesView(BaseView):
                         'type': 'thumbnail'
                     }
                 elif derivative_type == 'small':
-                    derivative_path = os.path.join(dirname, f"{root}_SMALL.jpg")
+                    small_dir = os.path.join(temp_base_dir, 'SMALL')
+                    os.makedirs(small_dir, exist_ok=True)
+                    derivative_path = os.path.join(small_dir, f"{root}_SMALL.jpg")
                     self.logger.info(f"CollectionBuilder small path: {derivative_path}")
                     options = {
                         'trim': False,

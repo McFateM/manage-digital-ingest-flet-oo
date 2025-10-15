@@ -102,7 +102,20 @@ class FileSelectorView(BaseView):
             temp_dir = os.path.join(temp_base_dir, f"file_selector_{session_id}")
             os.makedirs(temp_dir, exist_ok=True)
             
-            self.logger.info(f"Created temporary directory: {temp_dir}")
+            # Create OBJS subdirectory for source files
+            objs_dir = os.path.join(temp_dir, "OBJS")
+            os.makedirs(objs_dir, exist_ok=True)
+            
+            # Create TN and SMALL subdirectories for derivatives
+            tn_dir = os.path.join(temp_dir, "TN")
+            small_dir = os.path.join(temp_dir, "SMALL")
+            os.makedirs(tn_dir, exist_ok=True)
+            os.makedirs(small_dir, exist_ok=True)
+            
+            self.logger.info(f"Created temporary directory structure: {temp_dir}")
+            self.logger.info(f"  - OBJS/: {objs_dir}")
+            self.logger.info(f"  - TN/: {tn_dir}")
+            self.logger.info(f"  - SMALL/: {small_dir}")
             
             temp_file_paths = []
             temp_file_info = []
@@ -120,15 +133,15 @@ class FileSelectorView(BaseView):
                     # Sanitize the filename (already handles spaces and dashes)
                     sanitized_filename = os.path.basename(self.sanitize_file_path(original_filename))
                     
-                    # Create the destination path
-                    temp_file_path = os.path.join(temp_dir, sanitized_filename)
+                    # Create the destination path in OBJS subdirectory
+                    temp_file_path = os.path.join(objs_dir, sanitized_filename)
                     
                     # Handle filename collisions
                     counter = 1
                     base_name, ext = os.path.splitext(sanitized_filename)
                     while os.path.exists(temp_file_path):
                         sanitized_filename = f"{base_name}_{counter}{ext}"
-                        temp_file_path = os.path.join(temp_dir, sanitized_filename)
+                        temp_file_path = os.path.join(objs_dir, sanitized_filename)
                         counter += 1
                     
                     # Create symbolic link instead of copying the file
@@ -143,7 +156,7 @@ class FileSelectorView(BaseView):
                         'sanitized_filename': sanitized_filename
                     })
                     
-                    self.logger.info(f"Created symbolic link '{sanitized_filename}' -> '{original_path}' in temp directory")
+                    self.logger.info(f"Created symbolic link '{sanitized_filename}' -> '{original_path}' in OBJS/")
                     
                 except Exception as e:
                     self.logger.error(f"Failed to create symbolic link for file {original_path}: {str(e)}")
@@ -151,10 +164,13 @@ class FileSelectorView(BaseView):
             
             # Store in session
             self.page.session.set("temp_directory", temp_dir)
+            self.page.session.set("temp_objs_directory", objs_dir)
+            self.page.session.set("temp_tn_directory", tn_dir)
+            self.page.session.set("temp_small_directory", small_dir)
             self.page.session.set("temp_files", temp_file_paths)
             self.page.session.set("temp_file_info", temp_file_info)
             
-            self.logger.info(f"Successfully created {len(temp_file_paths)} symbolic links in temporary directory")
+            self.logger.info(f"Successfully created {len(temp_file_paths)} symbolic links in OBJS/ directory")
             return temp_file_paths, temp_file_info, temp_dir
             
         except Exception as e:
