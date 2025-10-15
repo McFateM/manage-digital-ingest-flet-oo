@@ -539,6 +539,10 @@ class FilePickerSelectorView(FileSelectorView):
         self.logger.info(f"Creating symbolic links for {len(file_paths)} files in temporary directory...")
         temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(file_paths)
         
+        # Update selected_file_paths to point to temp files so derivatives are created there
+        if temp_files:
+            self.page.session.set("selected_file_paths", temp_files)
+        
         if temp_files:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Successfully created {len(temp_files)} symbolic links in temporary directory"),
@@ -963,157 +967,98 @@ class CSVSelectorView(FileSelectorView):
             
             self.page.update( )
             
-            # Add fuzzy search status indicator and matched files list
-            # DEBUG: Temporarily show displays if we have files (removing search_completed check)
-            if search_completed and selected_files and len(selected_files) > 0:
-                print(f"DEBUG: Search completed = {search_completed}, creating displays with {len(selected_files)} files")
-                print(f"DEBUG: display_matched_count = {display_matched_count}, display_original_count = {display_original_count}")
-                
+            # === Show results after fuzzy search completes ===
+            if search_completed:
+                # Status summary
                 unmatched_count = display_original_count - display_matched_count
                 status_color = ft.Colors.GREEN_600 if unmatched_count == 0 else ft.Colors.ORANGE_600
                 
-                search_content_column.controls.extend([
-                    ft.Container(height=10),
-                    ft.Text(f"✅ {display_matched_count} of {display_original_count} files matched via fuzzy search", 
-                           size=12, color=status_color, weight=ft.FontWeight.BOLD)
-                ])
-                
-                # Show unmatched files warning if any
-                if unmatched_count > 0:
-                    search_content_column.controls.append(
-                        ft.Text(f"⚠️ {unmatched_count} files could not be matched", 
-                               size=12, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD)
+                search_content_column.controls.append(ft.Container(height=10))
+                search_content_column.controls.append(
+                    ft.Text(
+                        f"✅ Search Complete: {display_matched_count} of {display_original_count} files matched", 
+                        size=13, 
+                        color=status_color, 
+                        weight=ft.FontWeight.BOLD
                     )
+                )
                 
-                # Show matched file paths
+                # Show matched files
+                matched_ratios = self.page.session.get("matched_ratios") or []
+                self.logger.info(f"Display: selected_files has {len(selected_files)} items, matched_ratios has {len(matched_ratios)} items")
+                
                 if selected_files and len(selected_files) > 0:
-                    search_content_column.controls.extend([
-                        ft.Container(height=10),
-                        ft.Text("Matched file paths:", 
-                               size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                        ft.Text(f"DEBUG: Should show {len(selected_files)} files below", 
-                               size=10, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD),
-                        ft.Text("(Bold entries indicate exact matches; red entries indicate partial matches)", 
-                               size=10, color=colors['secondary_text'], italic=True),
-                        ft.Text(f"Debug: Found {len(selected_files)} files in session", 
-                               size=10, color=ft.Colors.BLUE_600, italic=True)
-                    ])
+                    search_content_column.controls.append(ft.Container(height=10))
+                    search_content_column.controls.append(
+                        ft.Text("Matched files:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+                    )
                     
-                    # Display matched files with full paths and match ratios
-                    display_items = []
-                    matched_ratios = self.page.session.get("matched_ratios") or []
-                    absolute_path_count = 0
-                    
-                    print(f"DEBUG: About to process {len(selected_files)} files for display")
-                    print(f"DEBUG: matched_ratios has {len(matched_ratios)} entries")
-                    if len(selected_files) > 0:
-                        print(f"DEBUG: First 3 files from selected_files: {selected_files[:3]}")
-                    
+                    matched_items = []
+                    # Since selected_files only contains matched paths, and matched_ratios align with them
                     for i, filepath in enumerate(selected_files):
-                        print(f"DEBUG: Processing file {i}: '{filepath}' - is absolute: {os.path.isabs(filepath)}")
+                        if filepath:  # Should all be absolute paths
+                            ratio = matched_ratios[i] if i < len(matched_ratios) else 100
+                            display_text = f"{os.path.basename(filepath)} ({ratio}%)"
+                            text_color = colors['secondary_text'] if ratio == 100 else ft.Colors.ORANGE_600
+                            matched_items.append(
+                                ft.Text(display_text, size=11, color=text_color)
+                            )
+                    
+                    self.logger.info(f"Display: Created {len(matched_items)} matched items")
+                    
+                    if matched_items:
+                        list_height = min(200, len(matched_items) * 20 + 10)
+                        self.logger.info(f"Display: Creating ListView with height={list_height}")
                         
-                        # Process both absolute and relative paths
-                        if os.path.isabs(filepath):
-                            absolute_path_count += 1
-                            # Get the match ratio for this file (if available)
-                            ratio = matched_ratios[i] if i < len(matched_ratios) else 100
-                            display_text = f"{i+1}. {os.path.basename(filepath)} → {filepath} ({ratio}%)"
-                            
-                            print(f"DEBUG: Adding absolute path display item: '{display_text}'")
-                            
-                            # Make text bold if match ratio is exactly 100% (exact match)
-                            # Make text red if match ratio is less than 100% (partial match)
-                            if ratio == 100:
-                                display_items.append(
-                                    ft.Text(display_text, size=11, color=colors['secondary_text'], 
-                                           weight=ft.FontWeight.BOLD)
-                                )
-                            else:
-                                display_items.append(
-                                    ft.Text(display_text, size=11, color=ft.Colors.RED_600)
-                                )
-                        else:
-                            # Handle relative paths too
-                            ratio = matched_ratios[i] if i < len(matched_ratios) else 100
-                            display_text = f"{i+1}. {filepath} ({ratio}%)"
-                            
-                            print(f"DEBUG: Adding relative path display item: '{display_text}'")
-                            
-                            # Make text bold if match ratio is exactly 100% (exact match)
-                            if ratio == 100:
-                                display_items.append(
-                                    ft.Text(display_text, size=11, color=colors['secondary_text'], 
-                                           weight=ft.FontWeight.BOLD)
-                                )
-                            else:
-                                display_items.append(
-                                    ft.Text(display_text, size=11, color=ft.Colors.RED_600)
-                                )
-                    
-                    # Add debug info
-                    print(f"DEBUG: Created {len(display_items)} display items")
-                    display_items.insert(0, ft.Text(f"Debug: {absolute_path_count} absolute paths found out of {len(selected_files)} total", 
-                                                   size=10, color=ft.Colors.BLUE_600, italic=True))
-                    
-                    # Ensure we have content to display
-                    if len(display_items) <= 1:  # Only debug info
-                        display_items.append(
-                            ft.Text("No valid file paths to display", size=11, color=colors['secondary_text'], italic=True)
+                        matched_list_view = ft.ListView(matched_items, spacing=2, height=list_height)
+                        
+                        search_content_column.controls.append(
+                            ft.Container(
+                                content=matched_list_view,
+                                border=ft.border.all(1, colors['border']),
+                                border_radius=5,
+                                padding=10,
+                                margin=ft.margin.symmetric(vertical=5)
+                            )
                         )
-                    
-                    filename_list = ft.ListView(
-                        controls=display_items,
-                        spacing=2, 
-                        height=min(200, len(display_items) * 25 + 20)
-                    )
-                    
-                    print(f"DEBUG: Created ListView with {len(display_items)} controls, height={min(200, len(display_items) * 25 + 20)}")
-                    
-                    list_container = ft.Container(
-                        content=filename_list,
-                        border=ft.border.all(1, colors['border']),
-                        border_radius=5,
-                        padding=10,
-                        margin=ft.margin.symmetric(vertical=5)
-                    )
-                    
-                    print(f"DEBUG: Adding ListView container to search_content_column.controls")
-                    search_content_column.controls.append(list_container)
-                    print(f"DEBUG: search_content_column.controls now has {len(search_content_column.controls)} items")
+                        self.logger.info(f"Display: Added matched files container to search_content_column")
+                    else:
+                        search_content_column.controls.append(
+                            ft.Text("No matched files to display", size=11, color=colors['secondary_text'], italic=True)
+                        )
                 
-                self.page.update( )
-
-                # Show unmatched filenames if any
+                # Show unmatched files
                 unmatched_filenames = self.page.session.get("unmatched_filenames") or []
-                if unmatched_filenames and len(unmatched_filenames) > 0:
-                    search_content_column.controls.extend([
-                        ft.Container(height=10),
-                        ft.Text("Unmatched filenames:", 
-                               size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_600)
-                    ])
-                    
-                    # Display unmatched filenames
-                    unmatched_items = []
-                    for i, filename in enumerate(unmatched_filenames):
-                        unmatched_items.append(
-                            ft.Text(f"{i+1}. {filename}", size=11, color=ft.Colors.RED_400)
+                self.logger.info(f"Display: unmatched_filenames has {len(unmatched_filenames)} items")
+                
+                if unmatched_filenames:
+                    search_content_column.controls.append(ft.Container(height=10))
+                    search_content_column.controls.append(
+                        ft.Text(
+                            f"⚠️ {len(unmatched_filenames)} unmatched files:", 
+                            size=12, 
+                            weight=ft.FontWeight.BOLD, 
+                            color=ft.Colors.RED_600
                         )
-                    
-                    # Ensure we have content to display
-                    if not unmatched_items:
-                        unmatched_items.append(
-                            ft.Text("No unmatched files", size=11, color=ft.Colors.RED_400, italic=True)
-                        )
-                    
-                    unmatched_list = ft.ListView(
-                        controls=unmatched_items,
-                        spacing=2, 
-                        height=min(150, len(unmatched_items) * 25 + 20)
                     )
+                    
+                    unmatched_items = [
+                        ft.Text(filename, size=11, color=ft.Colors.RED_400)
+                        for filename in unmatched_filenames[:20]  # Limit to first 20
+                    ]
+                    
+                    if len(unmatched_filenames) > 20:
+                        unmatched_items.append(
+                            ft.Text(f"... and {len(unmatched_filenames) - 20} more", 
+                                   size=11, color=ft.Colors.RED_400, italic=True)
+                        )
+                    
+                    unmatched_height = min(150, len(unmatched_items) * 20 + 10)
+                    self.logger.info(f"Display: Creating unmatched ListView with {len(unmatched_items)} items, height={unmatched_height}")
                     
                     search_content_column.controls.append(
                         ft.Container(
-                            content=unmatched_list,
+                            content=ft.ListView(unmatched_items, spacing=2, height=unmatched_height),
                             border=ft.border.all(1, ft.Colors.RED_200),
                             border_radius=5,
                             padding=10,
@@ -1121,43 +1066,18 @@ class CSVSelectorView(FileSelectorView):
                             bgcolor=ft.Colors.RED_50
                         )
                     )
-
-                self.page.update( )
-
             else:
-                # Add debug information for why files aren't being displayed
-                debug_info = []
-                debug_info.append(f"Selected files count: {len(selected_files) if selected_files else 0}")
-                debug_info.append(f"Has full paths: {has_full_paths}")
-                debug_info.append(f"Search completed: {search_completed}")
-                
-                search_content_column.controls.extend([
-                    ft.Container(height=10),
-                    ft.Text("Debug Information:", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_600),
-                    ft.Text("\n".join(debug_info), size=10, color=ft.Colors.BLUE_600, italic=True)
-                ])
-                
-                self.page.update( )
-
-                if search_completed:
-                    search_content_column.controls.append(
-                        ft.Text("⚠️ Search completed but no matches found", 
-                               size=12, color=ft.Colors.RED_600, weight=ft.FontWeight.BOLD)
+                # Before search
+                search_content_column.controls.append(ft.Container(height=10))
+                search_content_column.controls.append(
+                    ft.Text(
+                        "⚠️ Select a search directory above to begin fuzzy search", 
+                        size=12, 
+                        color=ft.Colors.ORANGE_600, 
+                        weight=ft.FontWeight.BOLD
                     )
-                else:
-                    search_content_column.controls.append(
-                        ft.Text("⚠️ Files not yet matched", 
-                               size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD)
-                    )
+                )
 
-            self.page.update( )
-
-            # Create the final search_content with indentation
-            search_content = ft.Row([
-                ft.Container(width=10),  # 10 space indentation
-                search_content_column
-            ], alignment=ft.MainAxisAlignment.START)
-                    
             self.page.update( )
 
             # Determine subtitle based on search completion status
@@ -1178,15 +1098,14 @@ class CSVSelectorView(FileSelectorView):
             else:
                 # Initial state
                 search_subtitle = "Match filenames to actual files"
-            
-            self.page.update( )
 
+            # Create the ExpansionTile directly with the column (no extra Row wrapper needed)
             self.search_container.content = ft.ExpansionTile(
                 title=ft.Text("Fuzzy Search", weight=ft.FontWeight.BOLD),
                 subtitle=ft.Text(search_subtitle),
                 leading=ft.Icon(ft.Icons.SEARCH),
                 initially_expanded=True,
-                controls=[search_content]
+                controls=[search_content_column]  # Pass the column directly
             )
         
         # Add all containers to display
@@ -1373,6 +1292,9 @@ class CSVSelectorView(FileSelectorView):
                 self.logger.info(f"Auto-workflow: Creating symbolic links for {len(full_path_files)} matched files")
                 temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(full_path_files)
                 
+                # Update selected_file_paths to point to temp files so derivatives are created there
+                self.page.session.set("selected_file_paths", temp_files)
+                
                 # Close progress dialog
                 progress_dialog.open = False
                 self.page.update()
@@ -1494,6 +1416,10 @@ class CSVSelectorView(FileSelectorView):
             # Create symbolic links
             self.logger.info(f"Auto-workflow: Creating symbolic links for {len(file_paths)} files")
             temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(file_paths)
+            
+            # Update selected_file_paths to point to temp files so derivatives are created there
+            if temp_files:
+                self.page.session.set("selected_file_paths", temp_files)
             
             if temp_files:
                 # Close progress dialog
@@ -1704,6 +1630,10 @@ class CSVSelectorView(FileSelectorView):
         
         self.logger.info(f"Creating symbolic links for {len(full_path_files)} matched files in temporary directory...")
         temp_files, temp_file_info, temp_dir = self.copy_files_to_temp_directory(full_path_files)
+        
+        # Update selected_file_paths to point to temp files so derivatives are created there
+        if temp_files:
+            self.page.session.set("selected_file_paths", temp_files)
         
         if temp_files:
             self.page.snack_bar = ft.SnackBar(
