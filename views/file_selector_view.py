@@ -1004,9 +1004,41 @@ class CSVSelectorView(FileSelectorView):
                 self.logger.info(f"Display: selected_files has {len(selected_files)} items, matched_ratios has {len(matched_ratios)} items")
                 
                 if selected_files and len(selected_files) > 0:
+                    # Create copy to clipboard function for matched files
+                    def copy_matched_to_clipboard(e):
+                        selected = self.page.session.get("selected_file_paths") or []
+                        ratios = self.page.session.get("matched_ratios") or []
+                        if selected:
+                            # Create list with filenames and match percentages
+                            clipboard_lines = []
+                            for i, filepath in enumerate(selected):
+                                if filepath:
+                                    filename = os.path.basename(filepath)
+                                    ratio = ratios[i] if i < len(ratios) else 100
+                                    clipboard_lines.append(f"{filename} ({ratio}%)")
+                            
+                            clipboard_text = "\n".join(clipboard_lines)
+                            self.page.set_clipboard(clipboard_text)
+                            self.logger.info(f"Copied {len(clipboard_lines)} matched filenames to clipboard")
+                            self.page.snack_bar = ft.SnackBar(
+                                content=ft.Text(f"Copied {len(clipboard_lines)} matched filenames to clipboard"),
+                                bgcolor=ft.Colors.GREEN_600
+                            )
+                            self.page.snack_bar.open = True
+                            self.page.update()
+                    
                     search_content_column.controls.append(ft.Container(height=10))
                     search_content_column.controls.append(
-                        ft.Text("Matched files:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text'])
+                        ft.Row([
+                            ft.Text("Matched files:", size=12, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                            ft.IconButton(
+                                icon=ft.Icons.COPY,
+                                icon_size=16,
+                                tooltip="Copy matched filenames to clipboard",
+                                on_click=copy_matched_to_clipboard,
+                                icon_color=colors['primary_text']
+                            )
+                        ], spacing=5, alignment=ft.MainAxisAlignment.START)
                     )
                     
                     matched_items = []
@@ -1048,14 +1080,37 @@ class CSVSelectorView(FileSelectorView):
                 self.logger.info(f"Display: unmatched_filenames has {len(unmatched_filenames)} items")
                 
                 if unmatched_filenames:
+                    # Create copy to clipboard function for unmatched files
+                    def copy_unmatched_to_clipboard(e):
+                        unmatched = self.page.session.get("unmatched_filenames") or []
+                        if unmatched:
+                            clipboard_text = "\n".join(unmatched)
+                            self.page.set_clipboard(clipboard_text)
+                            self.logger.info(f"Copied {len(unmatched)} unmatched filenames to clipboard")
+                            self.page.snack_bar = ft.SnackBar(
+                                content=ft.Text(f"Copied {len(unmatched)} unmatched filenames to clipboard"),
+                                bgcolor=ft.Colors.GREEN_600
+                            )
+                            self.page.snack_bar.open = True
+                            self.page.update()
+                    
                     search_content_column.controls.append(ft.Container(height=10))
                     search_content_column.controls.append(
-                        ft.Text(
-                            f"⚠️ {len(unmatched_filenames)} unmatched files:", 
-                            size=12, 
-                            weight=ft.FontWeight.BOLD, 
-                            color=ft.Colors.RED_600
-                        )
+                        ft.Row([
+                            ft.Text(
+                                f"⚠️ {len(unmatched_filenames)} unmatched files:", 
+                                size=12, 
+                                weight=ft.FontWeight.BOLD, 
+                                color=ft.Colors.RED_600
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.COPY,
+                                icon_size=16,
+                                tooltip="Copy unmatched filenames to clipboard",
+                                on_click=copy_unmatched_to_clipboard,
+                                icon_color=ft.Colors.RED_600
+                            )
+                        ], spacing=5, alignment=ft.MainAxisAlignment.START)
                     )
                     
                     unmatched_items = [
