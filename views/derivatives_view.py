@@ -178,12 +178,19 @@ class DerivativesView(BaseView):
         
         # Update UI to show processing state
         self.processing = True
-        self.page.go("/derivatives")  # Refresh the view to show cancel button
-        
-        # Start processing
-        self.processing = True
         self.cancel_processing = False
         
+        # Update button states
+        if hasattr(self, 'create_button'):
+            self.create_button.disabled = True
+        if hasattr(self, 'clear_button'):
+            self.clear_button.disabled = True
+        if hasattr(self, 'cancel_button'):
+            self.cancel_button.visible = True
+        
+        self.page.update()
+        
+        # Start processing
         msg = f"Starting derivative creation for {total_files} files in {current_mode} mode"
         self.logger.info(msg)
         self.log_view.controls.clear()
@@ -310,8 +317,17 @@ class DerivativesView(BaseView):
         self.processing = False
         self.cancel_processing = False
         
-        # Refresh UI to show normal buttons again
-        self.page.go("/derivatives")
+        # Update button states back to normal
+        if hasattr(self, 'create_button'):
+            self.create_button.disabled = False
+        if hasattr(self, 'clear_button'):
+            self.clear_button.disabled = False
+        if hasattr(self, 'cancel_button'):
+            self.cancel_button.visible = False
+        
+        self.page.update()
+        
+        self.logger.info("Processing completed, buttons reset")
     
     def interrupt_processing(self, e):
         """Interrupt the current processing operation."""
@@ -406,34 +422,48 @@ class DerivativesView(BaseView):
             self.page.update()
             self.logger.info("Cleared derivatives log")
         
-        # Create dynamic control buttons based on processing state
-        if self.processing:
-            control_buttons = ft.Row([
-                ft.ElevatedButton(
-                    "🛑 Cancel Processing",
-                    icon=ft.Icons.CANCEL,
-                    on_click=on_interrupt_click,
-                    bgcolor=ft.Colors.RED_600,
-                    color=ft.Colors.WHITE
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
-        else:
-            control_buttons = ft.Row([
-                ft.ElevatedButton(
-                    "Create Derivatives",
-                    icon=ft.Icons.AUTO_FIX_HIGH,
-                    on_click=on_create_derivatives_click,
-                    disabled=(not current_mode or total_files == 0)
-                ),
-                ft.ElevatedButton(
-                    "Clear Results",
-                    icon=ft.Icons.CLEAR,
-                    on_click=on_clear_results_click
-                )
-            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+        # Create buttons with references that can be updated
+        create_button = ft.ElevatedButton(
+            "Create Derivatives",
+            icon=ft.Icons.AUTO_FIX_HIGH,
+            on_click=on_create_derivatives_click,
+            disabled=(not current_mode or total_files == 0)
+        )
         
-        # Create the UI layout
-        return ft.Column([
+        clear_button = ft.ElevatedButton(
+            "Clear Results",
+            icon=ft.Icons.CLEAR,
+            on_click=on_clear_results_click
+        )
+        
+        # Store button references for dynamic updates
+        self.create_button = create_button
+        self.clear_button = clear_button
+        
+        start_button = ft.Row([
+            create_button,
+            clear_button
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+        
+        # Create cancel button (always present, visibility controlled dynamically)
+        self.cancel_button = ft.Container(
+            content=ft.Column([
+                ft.Container(height=10),
+                ft.Row([
+                    ft.ElevatedButton(
+                        "🛑 Cancel Processing",
+                        icon=ft.Icons.CANCEL,
+                        on_click=on_interrupt_click,
+                        bgcolor=ft.Colors.RED_600,
+                        color=ft.Colors.WHITE
+                    )
+                ], alignment=ft.MainAxisAlignment.CENTER)
+            ], spacing=0),
+            visible=self.processing  # Initially hidden unless already processing
+        )
+        
+        # Build the layout
+        layout_controls = [
             ft.Row([
                 ft.Text("Derivatives Creation", size=24, weight=ft.FontWeight.BOLD),
                 self.create_log_button("Show Logs", ft.Icons.LIST_ALT)
@@ -450,8 +480,8 @@ class DerivativesView(BaseView):
                 margin=ft.margin.symmetric(vertical=5)
             ),
             
-            # Control buttons
-            control_buttons,
+            # Start button at top
+            start_button,
             
             ft.Container(height=5),
             
@@ -464,6 +494,11 @@ class DerivativesView(BaseView):
                 border_radius=5,
                 padding=2,
                 expand=True
-            )
+            ),
             
-        ], alignment="start", expand=True, spacing=0, scroll=ft.ScrollMode.AUTO)
+            # Cancel button below log (only visible during processing)
+            self.cancel_button
+        ]
+        
+        # Create the UI layout
+        return ft.Column(layout_controls, alignment="start", expand=True, spacing=0, scroll=ft.ScrollMode.AUTO)
