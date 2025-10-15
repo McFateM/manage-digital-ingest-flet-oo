@@ -11,7 +11,7 @@ from logger import SnackBarHandler
 from views import (
     HomeView, AboutView, SettingsView, ExitView,
     FilePickerSelectorView, GoogleSheetSelectorView, CSVSelectorView,
-    DerivativesView, StorageView, LogView
+    DerivativesView, StorageView, LogView, InstructionsView
 )
 import utils
 
@@ -101,6 +101,7 @@ class MDIApplication:
             "/file_selector": None,  # Will be dynamically created
             "/derivatives": DerivativesView(page),
             "/storage": StorageView(page),
+            "/instructions": InstructionsView(page),
             "/logs": LogView(page),
         }
     
@@ -118,6 +119,9 @@ class MDIApplication:
         
         def nav_storage(e):
             page.go("/storage")
+        
+        def nav_instructions(e):
+            page.go("/instructions")
         
         def nav_about(e):
             page.go("/about")
@@ -152,6 +156,7 @@ class MDIApplication:
                 ft.IconButton(ft.Icons.FILE_OPEN, tooltip="File Selector", on_click=nav_file_selector),
                 ft.IconButton(ft.Icons.AUTO_FIX_HIGH, tooltip="Derivatives", on_click=nav_derivatives),
                 ft.IconButton(ft.Icons.CLOUD_UPLOAD, tooltip="Storage", on_click=nav_storage),
+                ft.IconButton(ft.Icons.INTEGRATION_INSTRUCTIONS_ROUNDED, tooltip="Instructions", on_click=nav_instructions),
                 # Vertical separator before the Exit icon
                 ft.Container(
                     width=2,

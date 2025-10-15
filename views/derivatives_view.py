@@ -57,10 +57,11 @@ class DerivativesView(BaseView):
             self.logger.info(f"Temp base directory: {temp_base_dir}")
             
             if mode == 'Alma':
-                # Alma mode - create thumbnail only with _TN.jpg extension in TN/ directory
+                # Alma mode - create thumbnail with .jpg.clientThumb extension in TN/ directory
                 tn_dir = os.path.join(temp_base_dir, 'TN')
                 os.makedirs(tn_dir, exist_ok=True)
-                derivative_path = os.path.join(tn_dir, f"{root}_TN.jpg")
+                derivative_filename = f"{root}.jpg.clientThumb"
+                derivative_path = os.path.join(tn_dir, derivative_filename)
                 self.logger.info(f"Alma derivative path: {derivative_path}")
                 
                 # Define options for Alma thumbnails

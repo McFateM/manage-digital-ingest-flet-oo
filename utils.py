@@ -552,7 +552,22 @@ def create_derivative(page, mode, derivative_type, index, url, local_storage_pat
     
     # Create clientThumb thumbnails for Alma
     if mode == 'Alma':
-        derivative_path = f"/Users/mcfatem/OBJs"
+        # Create derivative filename with .jpg.clientThumb suffix
+        derivative_filename = f"{root}.jpg.clientThumb"
+        
+        # Determine output directory - use TN/ subdirectory if it exists
+        if dirname.endswith('OBJS'):
+            # If source is in OBJS/, put derivative in parallel TN/ directory
+            temp_base_dir = os.path.dirname(dirname)
+            derivative_dir = os.path.join(temp_base_dir, 'TN')
+        else:
+            # Otherwise use the same directory as source
+            derivative_dir = dirname
+        
+        # Ensure the derivative directory exists
+        os.makedirs(derivative_dir, exist_ok=True)
+        
+        derivative_path = os.path.join(derivative_dir, derivative_filename)
 
         # Define options for Alma thumbnails
         options = {
@@ -566,17 +581,23 @@ def create_derivative(page, mode, derivative_type, index, url, local_storage_pat
         # If original is an image...
         if ext.lower( ) in ['.tiff', '.tif', '.jpg', '.jpeg', '.png']:
             generate_thumbnail(sanitized, derivative_path, options)
-            utils.show_message(page, f"Created thumbnail for '{sanitized}'")
+            utils.show_message(page, f"Created thumbnail '{derivative_filename}' for '{basename}'")
 
         # If original is a PDF...
         elif ext.lower( ) == '.pdf':
-            cmd = 'magick ' + sanitized + '[0] ' + derivative_path
-            call(cmd, shell=True)
-            utils.show_message(page, f"Created thumbnail for '{sanitized}'")
+            cmd = f'magick "{sanitized}"[0] "{derivative_path}"'
+            return_code = call(cmd, shell=True)
+            if return_code == 0:
+                utils.show_message(page, f"Created thumbnail '{derivative_filename}' for '{basename}'")
+            else:
+                txt = f"Sorry, ImageMagick failed to create a thumbnail for '{basename}'"
+                utils.show_message(page, txt, is_error=True)
+                return False
 
         else:
-            txt = f"Sorry, we can't create a thumbnail for '{sanitized}'"
+            txt = f"Sorry, we can't create a thumbnail for '{basename}' (unsupported file type: {ext})"
             utils.show_message(page, txt, is_error=True)
+            return False
 
         return derivative_path
 
