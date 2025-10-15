@@ -865,14 +865,11 @@ class CSVSelectorView(FileSelectorView):
                 if current_selected_column:
                     selected_files = self.page.session.get("selected_file_paths") or []
                     
-                    # Get original count and search statistics
+                    # Get original count - should be set when column is selected
                     original_count = self.page.session.get("original_filename_count")
-                    search_completed = self.page.session.get("search_completed")
-                    if search_completed is None:
-                        search_completed = False
                     
                     # Use original count if available, otherwise current count
-                    if search_completed and original_count is not None:
+                    if original_count is not None:
                         extracted_filename_count = original_count
                     else:
                         extracted_filename_count = len(selected_files)
@@ -888,9 +885,9 @@ class CSVSelectorView(FileSelectorView):
                 # Get extracted filename count for subtitle
                 selected_files = self.page.session.get("selected_file_paths") or []
                 original_count = self.page.session.get("original_filename_count")
-                search_completed = self.page.session.get("search_completed")
                 
-                if search_completed and original_count is not None:
+                # Use original count if available, otherwise current count
+                if original_count is not None:
                     extracted_count = original_count
                 else:
                     extracted_count = len(selected_files)
@@ -910,6 +907,8 @@ class CSVSelectorView(FileSelectorView):
                 initially_expanded=bool(current_csv_columns and not current_selected_column),
                 controls=[columns_content]
             )
+            
+            self.page.update( )
         
         # === STEP 3: Fuzzy Search ===
         if current_selected_column:
@@ -922,7 +921,7 @@ class CSVSelectorView(FileSelectorView):
                 search_completed = False
             
             # Use original count if available, otherwise current count
-            if search_completed and original_count is not None:
+            if original_count is not None:
                 extracted_filename_count = original_count
             else:
                 extracted_filename_count = len(selected_files)
@@ -962,9 +961,11 @@ class CSVSelectorView(FileSelectorView):
                        size=11, color=colors['secondary_text'], italic=True)
             ], spacing=5, alignment=ft.CrossAxisAlignment.START)
             
+            self.page.update( )
+            
             # Add fuzzy search status indicator and matched files list
             # DEBUG: Temporarily show displays if we have files (removing search_completed check)
-            if selected_files and len(selected_files) > 0:
+            if search_completed and selected_files and len(selected_files) > 0:
                 print(f"DEBUG: Search completed = {search_completed}, creating displays with {len(selected_files)} files")
                 print(f"DEBUG: display_matched_count = {display_matched_count}, display_original_count = {display_original_count}")
                 
@@ -1080,6 +1081,8 @@ class CSVSelectorView(FileSelectorView):
                     search_content_column.controls.append(list_container)
                     print(f"DEBUG: search_content_column.controls now has {len(search_content_column.controls)} items")
                 
+                self.page.update( )
+
                 # Show unmatched filenames if any
                 unmatched_filenames = self.page.session.get("unmatched_filenames") or []
                 if unmatched_filenames and len(unmatched_filenames) > 0:
@@ -1118,6 +1121,9 @@ class CSVSelectorView(FileSelectorView):
                             bgcolor=ft.Colors.RED_50
                         )
                     )
+
+                self.page.update( )
+
             else:
                 # Add debug information for why files aren't being displayed
                 debug_info = []
@@ -1131,6 +1137,8 @@ class CSVSelectorView(FileSelectorView):
                     ft.Text("\n".join(debug_info), size=10, color=ft.Colors.BLUE_600, italic=True)
                 ])
                 
+                self.page.update( )
+
                 if search_completed:
                     search_content_column.controls.append(
                         ft.Text("⚠️ Search completed but no matches found", 
@@ -1141,14 +1149,16 @@ class CSVSelectorView(FileSelectorView):
                         ft.Text("⚠️ Files not yet matched", 
                                size=12, color=ft.Colors.ORANGE_600, weight=ft.FontWeight.BOLD)
                     )
-            
+
+            self.page.update( )
+
             # Create the final search_content with indentation
             search_content = ft.Row([
                 ft.Container(width=10),  # 10 space indentation
                 search_content_column
             ], alignment=ft.MainAxisAlignment.START)
                     
-                # search_content.controls[1].controls.append(ft.Row(height=10))  # Spacer
+            self.page.update( )
 
             # Determine subtitle based on search completion status
             search_directory = self.page.session.get("search_directory")
@@ -1169,6 +1179,8 @@ class CSVSelectorView(FileSelectorView):
                 # Initial state
                 search_subtitle = "Match filenames to actual files"
             
+            self.page.update( )
+
             self.search_container.content = ft.ExpansionTile(
                 title=ft.Text("Fuzzy Search", weight=ft.FontWeight.BOLD),
                 subtitle=ft.Text(search_subtitle),
@@ -1294,6 +1306,9 @@ class CSVSelectorView(FileSelectorView):
                 # Extract data from column
                 column_data = self.extract_column_data(current_csv_file, selected_col)
                 self.page.session.set("selected_file_paths", column_data)
+                # Set the original count when we first extract the filenames
+                original_count = len(column_data)
+                self.page.session.set("original_filename_count", original_count)
                 self.logger.info(f"Extracted {len(column_data)} potential filenames")
         else:
             self.page.session.set("selected_file_paths", [])
