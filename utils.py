@@ -243,3 +243,84 @@ def show_message(page, text, is_error=False):
     page.snack_bar.bgcolor = ft.Colors.RED_600 if is_error else ft.Colors.GREEN_600
     page.open(page.snack_bar)
     page.update( )
+
+
+# Validate CSV headings against verified heading files
+# ------------------------------------------------------------
+def validate_csv_headings(csv_file_path, mode):
+    """
+    Validate CSV file headings against verified heading files based on mode.
+    
+    Args:
+        csv_file_path: Path to the CSV file to validate
+        mode: Either 'Alma' or 'CollectionBuilder'
+        
+    Returns:
+        tuple: (is_valid: bool, unmatched_headings: list, error_message: str or None)
+        - is_valid: True if all headings match (for Alma) or if file is valid (for CB)
+        - unmatched_headings: List of headings that don't match verified list
+        - error_message: Error message if there was a problem, None otherwise
+        
+    Notes:
+        - For Alma mode: ALL headings in the CSV must exactly match verified headings.
+          Returns unmatched headings if any are found.
+        - For CollectionBuilder mode: CSV headings are checked against verified list,
+          but extra headings are allowed (more permissive).
+        - Order of headings does not matter, only the names.
+    """
+    import pandas as pd
+    
+    # Determine which verified headings file to use
+    if mode == 'Alma':
+        verified_file = os.path.join("_data", "verified_CSV_headings_for_Alma-D.csv")
+    elif mode == 'CollectionBuilder':
+        verified_file = os.path.join("_data", "verified_CSV_headings_for_GCCB_projects.csv")
+    else:
+        return (False, [], f"Invalid mode '{mode}'. Must be 'Alma' or 'CollectionBuilder'.")
+    
+    # Check if verified file exists
+    if not os.path.exists(verified_file):
+        return (False, [], f"Verified headings file not found: {verified_file}")
+    
+    # Check if CSV file exists
+    if not os.path.exists(csv_file_path):
+        return (False, [], f"CSV file not found: {csv_file_path}")
+    
+    try:
+        # Read the verified headings (first row only)
+        verified_df = pd.read_csv(verified_file, nrows=0)
+        verified_headings = set(verified_df.columns.tolist())
+        
+        # Read the CSV file headings (first row only) with multiple encodings
+        csv_df = None
+        encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+        
+        for encoding in encodings:
+            try:
+                csv_df = pd.read_csv(csv_file_path, nrows=0, encoding=encoding)
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        
+        if csv_df is None:
+            return (False, [], f"Could not read CSV file with any supported encoding")
+        
+        csv_headings = set(csv_df.columns.tolist())
+        
+        # Find headings in CSV that are NOT in verified list
+        unmatched_headings = list(csv_headings - verified_headings)
+        
+        # For Alma mode, be strict - no unmatched headings allowed
+        if mode == 'Alma':
+            if unmatched_headings:
+                return (False, unmatched_headings, None)
+            else:
+                return (True, [], None)
+        
+        # For CollectionBuilder mode, be more permissive - just report unmatched
+        # but don't fail validation (extra headings are OK)
+        elif mode == 'CollectionBuilder':
+            return (True, unmatched_headings, None)
+            
+    except Exception as e:
+        return (False, [], f"Error validating CSV headings: {str(e)}")
