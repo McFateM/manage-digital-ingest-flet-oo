@@ -96,11 +96,11 @@ def perform_fuzzy_search(base_path, target_filename, threshold=90):
                     if ratio == 100:
                         return (best_match_path, ratio)
         
-        # Only return the match if it meets the threshold
+        # Return the match path only if it meets the threshold, but always return the best ratio found
         if best_match_ratio >= threshold:
             return (best_match_path, best_match_ratio)
         else:
-            return (None, 0)
+            return (None, best_match_ratio)
             
     except Exception as e:
         logging.error(f"Error in fuzzy search: {str(e)}")
@@ -209,6 +209,29 @@ def perform_fuzzy_search_batch(base_path, target_filenames, threshold=90, progre
 
 
 
+# Read markdown file from _data directory
+# ------------------------------------------------------------------------------
+def read_markdown(filename):
+    """
+    Read markdown content from a file.
+    
+    Args:
+        filename (str): The filename (with path) to read
+        
+    Returns:
+        str: The markdown content
+    """
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        logging.error(f"Markdown file not found: {filename}")
+        return f"# Error\n\nMarkdown file not found: {filename}"
+    except Exception as e:
+        logging.error(f"Error reading markdown file {filename}: {e}")
+        return f"# Error\n\nError reading markdown file: {str(e)}"
+
+
 # Read config from _data/config.json and return as 'config'
 # ------------------------------------------------------------------------------
 def read_config(page=None):
@@ -227,6 +250,22 @@ def read_config(page=None):
     return config
 
 
+# Helper function to get session value with default
+# ------------------------------------------------------------------------------
+def session_get(page, key, default=None):
+    """
+    Get a value from page.session with a default fallback.
+    
+    Args:
+        page: The Flet page object
+        key (str): The session key to retrieve
+        default: The default value to return if key is not found or is None
+        
+    Returns:
+        The session value or the default value
+    """
+    value = page.session.get(key)
+    return value if value is not None else default
 
 
 # Helper function to display message in the SnackBar

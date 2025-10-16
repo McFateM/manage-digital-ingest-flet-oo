@@ -192,17 +192,18 @@ class StorageView(BaseView):
             selected_mode = "Alma"
         
         if selected_mode == "Alma":
-            # For Alma mode, show markdown content from 'About' section
-            alma_content = utils.read_data("_data/about.md")
+            # For Alma mode, show markdown content from 'Alma Storage' section
+            alma_content = utils.read_markdown("_data/alma_storage.md")
             return ft.Column(
                 controls=[
                     *self.create_page_header("Storage", include_log_button=True),
                     ft.Container(
                         content=ft.Markdown(
                             alma_content,
-                            selectable_text=True,
+                            selectable=True,
                             extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-                            on_tap_link=lambda e: self.page.launch_url(e.data)
+                            on_tap_link=lambda e: self.page.launch_url(e.data),
+                            md_style_sheet=self.get_markdown_style()
                         ),
                         bgcolor=colors['container_bg'],
                         border=ft.border.all(1, colors['border']),

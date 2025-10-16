@@ -1546,7 +1546,15 @@ class CSVSelectorView(FileSelectorView):
                 else:
                     matched_paths.append(None)
                     unmatched_filenames.append(filename)
-                    self.logger.info(f"Auto-workflow: No match found for '{filename}' meeting 90% threshold")
+                    # Log unmatched files with severity based on fuzzy score
+                    if ratio == 0:
+                        self.logger.error(f"Auto-workflow: No match found for '{filename}' (0% match)")
+                    elif ratio < 50:
+                        self.logger.error(f"Auto-workflow: No match found for '{filename}' ({ratio}% match - very low)")
+                    elif ratio < 90:
+                        self.logger.warning(f"Auto-workflow: No match found for '{filename}' ({ratio}% match - below 90% threshold)")
+                    else:
+                        self.logger.info(f"Auto-workflow: No match found for '{filename}' meeting 90% threshold")
             
             # Store search statistics
             self.page.session.set("original_filename_count", original_count)
@@ -1743,7 +1751,15 @@ class CSVSelectorView(FileSelectorView):
                 else:
                     matched_paths.append(None)
                     unmatched_filenames.append(filename)
-                    self.logger.info(f"No match found for '{filename}' meeting 90% threshold")
+                    # Log unmatched files with severity based on fuzzy score
+                    if ratio == 0:
+                        self.logger.error(f"No match found for '{filename}' (0% match)")
+                    elif ratio < 50:
+                        self.logger.error(f"No match found for '{filename}' ({ratio}% match - very low)")
+                    elif ratio < 90:
+                        self.logger.warning(f"No match found for '{filename}' ({ratio}% match - below 90% threshold)")
+                    else:
+                        self.logger.info(f"No match found for '{filename}' meeting 90% threshold")
             
             # Store search statistics for UI display
             self.page.session.set("original_filename_count", original_count)

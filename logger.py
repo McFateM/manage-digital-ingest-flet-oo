@@ -34,17 +34,12 @@ class SnackBarHandler(logging.Handler):
             msg = self.format(record)
             page = getattr(record, 'page', None) or self._page
             
-            # Debug: print to console
-            print(f"[SnackBarHandler] Level: {record.levelno}, Page: {page is not None}, Message: {msg}")
-            
             if page is None:
                 # No page available; nothing we can do
-                print("[SnackBarHandler] No page reference available!")
                 return
 
             # Ensure a snack_bar exists on the page
             if not hasattr(page, 'snack_bar') or page.snack_bar is None:
-                print("[SnackBarHandler] Creating new snackbar")
                 page.snack_bar = ft.SnackBar(content=ft.Text(msg))
 
             # Only show warnings and errors in snackbar
@@ -55,13 +50,9 @@ class SnackBarHandler(logging.Handler):
                 else:
                     bgcolor = ft.Colors.ORANGE_400
                 
-                print(f"[SnackBarHandler] Showing snackbar with bgcolor={bgcolor}")
                 page.snack_bar.content.value = msg
                 page.snack_bar.bgcolor = bgcolor
                 page.open(page.snack_bar)
                 page.update()
-            else:
-                print(f"[SnackBarHandler] Not showing snackbar (level {record.levelno} < WARNING)")
-        except Exception as e:
-            print(f"[SnackBarHandler] ERROR: {e}")
+        except Exception:
             self.handleError(record)

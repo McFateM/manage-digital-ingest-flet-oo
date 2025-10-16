@@ -8,6 +8,7 @@ and scripts based on the current mode.
 import flet as ft
 from views.base_view import BaseView
 import os
+import utils
 
 
 class InstructionsView(BaseView):
@@ -64,8 +65,7 @@ class InstructionsView(BaseView):
         alma_md_path = os.path.join("_data", "alma_aws_s3.md")
         if os.path.exists(alma_md_path):
             try:
-                with open(alma_md_path, 'r', encoding='utf-8') as f:
-                    md_content = f.read()
+                md_content = utils.read_markdown(alma_md_path)
                 
                 # Add a Markdown control to display the file content
                 instructions.append(
@@ -74,6 +74,7 @@ class InstructionsView(BaseView):
                         selectable=True,
                         extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
                         on_tap_link=lambda e: self.page.launch_url(e.data),
+                        md_style_sheet=self.get_markdown_style()
                     )
                 )
             except Exception as e:

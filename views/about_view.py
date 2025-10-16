@@ -38,33 +38,36 @@ class AboutView(BaseView):
         def _log_error(e):
             self.logger.error("Demo ERROR from About page")
 
-        # Generate session report
+        # Generate session report as plain text (markdown breaks with complex data)
         session_data_found = False
-        session_report = "## Current Session Data:\n\n"
+        session_lines = []
+        session_lines.append(ft.Text("Current Session Data:", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']))
+        session_lines.append(ft.Container(height=10))
 
         # Get all session keys and values
         for key in self.page.session.get_keys():
             value = self.page.session.get(key)
-            # Truncate long values for display
+            # Don't truncate - show full values
             value_str = str(value)
-            if len(value_str) > 100:
-                value_str = value_str[:100] + "..."
-            session_report += f"**{key}**: `{value_str}`\n\n"
+            session_lines.append(
+                ft.Column([
+                    ft.Text(f"{key}:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                    ft.Text(value_str, size=12, color=colors['code_text'], selectable=True),
+                    ft.Container(height=5),
+                ], spacing=2)
+            )
             session_data_found = True
         
         if not session_data_found:
-            session_report += "*No session data found!*\n\n"
+            session_lines.append(ft.Text("No session data found!", italic=True, color=colors['secondary_text']))
         
-        session_report += "---\n\n"
-        session_report += "*This report shows all key-value pairs stored in `page.session`.*"
+        session_lines.append(ft.Container(height=10))
+        session_lines.append(ft.Divider(color=colors['divider']))
+        session_lines.append(ft.Text("This report shows all key-value pairs stored in page.session.", 
+                                     size=11, italic=True, color=colors['secondary_text']))
 
-        # Create a Markdown widget with the session report
-        md_widget = ft.Markdown(
-            session_report,
-            selectable=True,
-            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
-            auto_follow_links=False,
-        )  
+        # Create a column with all session data
+        session_widget = ft.Column(session_lines, spacing=0, scroll=ft.ScrollMode.AUTO)  
 
         # Read config from _data/config.json
         config = utils.read_config()
@@ -90,9 +93,13 @@ class AboutView(BaseView):
                        size=14, color=colors['secondary_text']),
                 ft.Divider(height=15, color=colors['divider']),
                 ft.Container(
-                    content=md_widget,
+                    content=session_widget,
                     padding=10,
                     width=800,
+                    height=400,  # Set explicit height for scrolling
+                    bgcolor=colors['container_bg'],
+                    border=ft.border.all(1, colors['border']),
+                    border_radius=8,
                 ),
                 ft.Divider(height=15, color=colors['divider']),
                 ft.Row([

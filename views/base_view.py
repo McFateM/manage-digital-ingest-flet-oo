@@ -81,6 +81,33 @@ class BaseView(ABC):
         self.page.snack_bar.open = True
         self.page.update()
     
+    def get_markdown_style(self):
+        """
+        Get consistent Markdown styling for all views.
+        
+        Returns:
+            ft.MarkdownStyleSheet: Style sheet for Markdown widgets
+        """
+        colors = self.get_theme_colors()
+        return ft.MarkdownStyleSheet(
+            blockquote_text_style=ft.TextStyle(
+                bgcolor=colors['markdown_bg'], 
+                color=colors['markdown_text'], 
+                size=16, 
+                weight=ft.FontWeight.BOLD
+            ),
+            p_text_style=ft.TextStyle(
+                color=colors['primary_text'], 
+                size=14, 
+                weight=ft.FontWeight.NORMAL
+            ),
+            code_text_style=ft.TextStyle(
+                color=colors['code_text'], 
+                size=12, 
+                weight=ft.FontWeight.BOLD
+            ),
+        )
+    
     def create_log_button(self, text="Show Logs", icon=ft.Icons.LIST_ALT):
         """Create a button that opens the log overlay"""
         from views.log_overlay import LogOverlay

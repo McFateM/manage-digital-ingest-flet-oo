@@ -27,16 +27,12 @@ class HomeView(BaseView):
         colors = self.get_theme_colors()
 
         # Read markdown content from a file
-        with open("_data/home.md", "r", encoding="utf-8") as file:
-            markdown_text = file.read()
+        markdown_text = utils.read_markdown("_data/home.md")
         
         # Create a Markdown widget with the content
-        md_widget = ft.Markdown(markdown_text, 
-            md_style_sheet=ft.MarkdownStyleSheet(
-                blockquote_text_style=ft.TextStyle(bgcolor=colors['markdown_bg'], color=colors['markdown_text'], size=16, weight=ft.FontWeight.BOLD),
-                p_text_style=ft.TextStyle(color=colors['primary_text'], size=16, weight=ft.FontWeight.NORMAL),
-                code_text_style=ft.TextStyle(color=colors['code_text'], size=16, weight=ft.FontWeight.BOLD),
-            )
+        md_widget = ft.Markdown(
+            markdown_text, 
+            md_style_sheet=self.get_markdown_style()
         )  
 
         # Read config from _data/config.json

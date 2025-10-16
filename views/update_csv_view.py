@@ -24,6 +24,7 @@ class UpdateCSVView(BaseView):
         """Initialize the update CSV view."""
         super().__init__(page)
         self.csv_data = None
+        self.csv_data_original = None  # Store original data for comparison
         self.csv_path = None
         self.temp_csv_path = None
         self.selected_column = None
@@ -87,6 +88,8 @@ class UpdateCSVView(BaseView):
             for encoding in encodings:
                 try:
                     self.csv_data = pd.read_csv(csv_path, encoding=encoding)
+                    # Store a copy of the original data for comparison
+                    self.csv_data_original = self.csv_data.copy()
                     self.csv_path = csv_path
                     self.logger.info(f"Loaded CSV with {len(self.csv_data)} rows and {len(self.csv_data.columns)} columns")
                     return True
@@ -161,9 +164,9 @@ class UpdateCSVView(BaseView):
             # Get the selected column name
             column_name = self.selected_column
             if not column_name:
-                self.logger.warning("No column selected for updates")
+                self.logger.warning("Target column not configured")
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Please select a column to update"),
+                    content=ft.Text("Target column not configured"),
                     bgcolor=ft.Colors.ORANGE_600
                 )
                 self.page.snack_bar.open = True
@@ -212,56 +215,123 @@ class UpdateCSVView(BaseView):
     
     def render_data_table(self):
         """
-        Render the CSV data as a DataTable.
+        Render the CSV data as before/after comparison tables.
         
         Returns:
-            ft.Container: Container with the data table
+            ft.Container: Container with the before and after data tables
         """
         colors = self.get_theme_colors()
         
-        if self.csv_data is None:
+        if self.csv_data is None or self.csv_data_original is None:
             return ft.Container(
                 content=ft.Text("No CSV data loaded", color=colors['secondary_text']),
                 padding=20
             )
         
-        # Limit to first 50 rows for display
-        display_data = self.csv_data.head(50)
+        # Limit to first 5 rows for display
+        display_data_before = self.csv_data_original.head(5)
+        display_data_after = self.csv_data.head(5)
         
-        # Create columns
-        columns = [
+        # Create "Before" table
+        before_columns = [
             ft.DataColumn(ft.Text(col, weight=ft.FontWeight.BOLD, size=12))
-            for col in display_data.columns
+            for col in display_data_before.columns
         ]
         
-        # Create rows
-        rows = []
-        for idx, row in display_data.iterrows():
+        before_rows = []
+        for idx, row in display_data_before.iterrows():
             cells = [
                 ft.DataCell(ft.Text(str(val), size=11))
                 for val in row
             ]
-            rows.append(ft.DataRow(cells=cells))
+            before_rows.append(ft.DataRow(cells=cells))
         
-        table = ft.DataTable(
-            columns=columns,
-            rows=rows,
+        before_table = ft.DataTable(
+            columns=before_columns,
+            rows=before_rows,
             border=ft.border.all(1, colors['border']),
             border_radius=10,
             horizontal_lines=ft.BorderSide(1, colors['border']),
             heading_row_color=ft.Colors.GREY_200,
+            column_spacing=10,
+            data_row_min_height=30,
+            data_row_max_height=35,
+            heading_row_height=40,
         )
         
+        # Create "After" table with changed cells highlighted
+        after_columns = [
+            ft.DataColumn(ft.Text(col, weight=ft.FontWeight.BOLD, size=12))
+            for col in display_data_after.columns
+        ]
+        
+        after_rows = []
+        for idx, row in display_data_after.iterrows():
+            cells = []
+            for col_idx, (col, val) in enumerate(row.items()):
+                # Check if value changed from original
+                original_val = display_data_before.iloc[idx, col_idx]
+                if str(val) != str(original_val):
+                    # Highlight changed cells with bold green text
+                    cells.append(
+                        ft.DataCell(
+                            ft.Text(str(val), size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_700)
+                        )
+                    )
+                else:
+                    cells.append(ft.DataCell(ft.Text(str(val), size=11)))
+            after_rows.append(ft.DataRow(cells=cells))
+        
+        after_table = ft.DataTable(
+            columns=after_columns,
+            rows=after_rows,
+            border=ft.border.all(1, colors['border']),
+            border_radius=10,
+            horizontal_lines=ft.BorderSide(1, colors['border']),
+            heading_row_color=ft.Colors.GREY_200,
+            column_spacing=10,
+            data_row_min_height=30,
+            data_row_max_height=35,
+            heading_row_height=40,
+        )
+        
+        # Create side-by-side layout with scrolling
         return ft.Container(
             content=ft.Column([
-                ft.Text(f"Showing first {len(display_data)} of {len(self.csv_data)} rows",
+                ft.Text(f"Showing first 5 of {len(self.csv_data)} rows",
                        size=12, italic=True, color=colors['secondary_text']),
-                ft.Container(
-                    content=table,
-                    border=ft.border.all(1, colors['border']),
-                    border_radius=10,
-                    padding=10,
-                )
+                ft.Row([
+                    # Before table
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("Before:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Row([before_table], scroll=ft.ScrollMode.AUTO)
+                                ], scroll=ft.ScrollMode.AUTO),
+                                border=ft.border.all(1, colors['border']),
+                                border_radius=10,
+                                padding=10,
+                            )
+                        ], spacing=5),
+                        expand=1
+                    ),
+                    # After table
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("After:", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.GREEN_700),
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Row([after_table], scroll=ft.ScrollMode.AUTO)
+                                ], scroll=ft.ScrollMode.AUTO),
+                                border=ft.border.all(2, ft.Colors.GREEN_700),
+                                border_radius=10,
+                                padding=10,
+                            )
+                        ], spacing=5),
+                        expand=1
+                    ),
+                ], spacing=10, expand=True),
             ], spacing=10),
             expand=True
         )
@@ -366,21 +436,16 @@ class UpdateCSVView(BaseView):
                 if not self.load_csv_data(self.temp_csv_path):
                     self.logger.error("Failed to load CSV file")
         
-        # Column selector dropdown
-        column_selector = None
-        if self.csv_data is not None:
-            def on_column_change(e):
-                self.selected_column = e.control.value
-                self.logger.info(f"Selected column for updates: {self.selected_column}")
-            
-            column_selector = ft.Dropdown(
-                label="Column to Update",
-                hint_text="Select the column containing filenames",
-                options=[ft.dropdown.Option(col) for col in self.csv_data.columns],
-                value=self.selected_column,
-                on_change=on_column_change,
-                width=300
-            )
+        # Get current mode to determine column name for updates
+        current_mode = utils.session_get(self.page, "selected_mode", "Alma")
+        
+        # Set the column to update based on mode (no selector needed)
+        if current_mode == "Alma":
+            self.selected_column = "file_name_1"
+            button_text = "Apply Matched Files to file_name_1"
+        else:  # CollectionBuilder
+            self.selected_column = "object_location"  # TODO: Update this for CollectionBuilder
+            button_text = "Apply Matched Files to object_location"
         
         # Build the UI - Status information controls
         status_info_controls = []
@@ -424,12 +489,9 @@ class UpdateCSVView(BaseView):
         button_row_controls = []
         
         if self.csv_data is not None:
-            if column_selector:
-                button_row_controls.append(column_selector)
-            
             button_row_controls.extend([
                 ft.ElevatedButton(
-                    "Apply Matched Files",
+                    button_text,
                     icon=ft.Icons.UPDATE,
                     on_click=self.apply_matched_files
                 ),
