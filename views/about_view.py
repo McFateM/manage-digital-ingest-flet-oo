@@ -89,7 +89,11 @@ class AboutView(BaseView):
                 ft.Text("A Flet Python app for managing Grinnell College ingest of digital objects to Alma or CollectionBuilder",
                        size=14, color=colors['secondary_text']),
                 ft.Divider(height=15, color=colors['divider']),
-                md_widget,
+                ft.Container(
+                    content=md_widget,
+                    padding=10,
+                    width=800,
+                ),
                 ft.Divider(height=15, color=colors['divider']),
                 ft.Row([
                     ft.ElevatedButton("Log INFO", on_click=_log_info),
