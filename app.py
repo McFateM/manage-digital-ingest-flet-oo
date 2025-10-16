@@ -99,10 +99,10 @@ class MDIApplication:
             "/settings": SettingsView(page),
             "/exit": ExitView(page),
             "/file_selector": None,  # Will be dynamically created
-            "/derivatives": DerivativesView(page),
-            "/storage": StorageView(page),
-            "/instructions": InstructionsView(page),
-            "/logs": LogView(page),
+            "/create_derivatives": DerivativesView(page),
+            "/azure_storage": StorageView(page),
+            "/show_instructions": InstructionsView(page),
+            "/show_logs": LogView(page),
         }
     
     def build_appbar(self, page: ft.Page) -> ft.AppBar:
@@ -114,14 +114,14 @@ class MDIApplication:
         def nav_file_selector(e):
             page.go("/file_selector")
         
-        def nav_derivatives(e):
-            page.go("/derivatives")
+        def nav_create_derivatives(e):
+            page.go("/create_derivatives")
         
-        def nav_storage(e):
-            page.go("/storage")
+        def nav_azure_storage(e):
+            page.go("/azure_storage")
         
-        def nav_instructions(e):
-            page.go("/instructions")
+        def nav_show_instructions(e):
+            page.go("/show_instructions")
         
         def nav_about(e):
             page.go("/about")
@@ -129,8 +129,8 @@ class MDIApplication:
         def nav_settings(e):
             page.go("/settings")
         
-        def nav_logs(e):
-            page.go("/logs")
+        def nav_show_logs(e):
+            page.go("/show_logs")
         
         def nav_exit(e):
             page.go("/exit")
@@ -143,9 +143,9 @@ class MDIApplication:
             bgcolor=ft.Colors.BLUE_GREY_100,
             actions=[
                 ft.IconButton(ft.Icons.HOME, tooltip="Home", on_click=nav_home),
-                ft.IconButton(ft.Icons.SETTINGS, tooltip="Settings", on_click=nav_settings),
+                ft.IconButton(ft.Icons.SETTINGS, tooltip="Manage Settings", on_click=nav_settings),
                 ft.IconButton(ft.Icons.INFO, tooltip="About", on_click=nav_about),
-                ft.IconButton(ft.Icons.LIST_ALT, tooltip="Application Log", on_click=nav_logs),
+                ft.IconButton(ft.Icons.LIST_ALT, tooltip="Display Application Log", on_click=nav_show_logs),
                 # Vertical separator between Application Log and File Selector icons
                 ft.Container(
                     width=2,
@@ -154,9 +154,9 @@ class MDIApplication:
                     margin=ft.margin.symmetric(horizontal=4)
                 ),
                 ft.IconButton(ft.Icons.FILE_OPEN, tooltip="File Selector", on_click=nav_file_selector),
-                ft.IconButton(ft.Icons.AUTO_FIX_HIGH, tooltip="Derivatives", on_click=nav_derivatives),
-                ft.IconButton(ft.Icons.CLOUD_UPLOAD, tooltip="Storage", on_click=nav_storage),
-                ft.IconButton(ft.Icons.INTEGRATION_INSTRUCTIONS_ROUNDED, tooltip="Instructions", on_click=nav_instructions),
+                ft.IconButton(ft.Icons.AUTO_FIX_HIGH, tooltip="Create Derivatives", on_click=nav_create_derivatives),
+                ft.IconButton(ft.Icons.CLOUD_UPLOAD, tooltip="Azure Storage", on_click=nav_azure_storage),
+                ft.IconButton(ft.Icons.INTEGRATION_INSTRUCTIONS_ROUNDED, tooltip="Show Final Instructions", on_click=nav_show_instructions),
                 # Vertical separator before the Exit icon
                 ft.Container(
                     width=2,

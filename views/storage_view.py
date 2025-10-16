@@ -26,7 +26,7 @@ class StorageView(BaseView):
         colors = self.get_theme_colors()
         
         # Create page header using base class method
-        header_controls = self.create_page_header("Storage")
+        header_controls = self.create_page_header("Azure Storage")
         
         return ft.Column([
             *header_controls,
