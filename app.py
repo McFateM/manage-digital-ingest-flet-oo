@@ -7,6 +7,7 @@ lifecycle, routing, and UI structure.
 
 import flet as ft
 import logging
+from dotenv import load_dotenv
 from logger import SnackBarHandler
 from views import (
     HomeView, AboutView, SettingsView, ExitView,
@@ -14,6 +15,9 @@ from views import (
     DerivativesView, StorageView, LogView, InstructionsView
 )
 import utils
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class MDIApplication:

@@ -462,50 +462,50 @@ def connect_to_azure_blob(page):
 
 
 
-# # upload_to_azure( ) - Just what the name says post-processing
-# # ----------------------------------------------------------------------------------------------
-# def upload_to_azure(blob_service_client, url, match, local_storage_path, transcript=False):
+# upload_to_azure( ) - Just what the name says post-processing
+# ----------------------------------------------------------------------------------------------
+def upload_to_azure(blob_service_client, url, match, local_storage_path, transcript=False):
 
-#     try:
+    try:
 
-#         if transcript:
-#             container_name = "transcripts"
-#         elif "thumbs/" in url:
-#             container_name = "thumbs"
-#         elif "smalls/" in url:
-#             container_name = "smalls"
-#         else:
-#             container_name = "objs"
+        if transcript:
+            container_name = "transcripts"
+        elif "thumbs/" in url:
+            container_name = "thumbs"
+        elif "smalls/" in url:
+            container_name = "smalls"
+        else:
+            container_name = "objs"
 
-#         # Create a blob client using the local file name as the name for the blob
-#         if container_name:
-#             blob_client = blob_service_client.get_blob_client(
-#                 container=container_name, blob=match)
-#             if blob_client.exists():
-#                 txt = f"Blob '{match}' already exists in Azure Storage container '{container_name}'.  Skipping this upload."
-#                 st.success(txt)
-#                 state('logger').success(txt)
-#                 return "EXISTS"
-#             else:
-#                 txt = f"Uploading '{match}' to Azure Storage container '{container_name}'"
-#                 st.success(txt)
-#                 state('logger').success(txt)
+        # Create a blob client using the local file name as the name for the blob
+        if container_name:
+            blob_client = blob_service_client.get_blob_client(
+                container=container_name, blob=match)
+            if blob_client.exists():
+                txt = f"Blob '{match}' already exists in Azure Storage container '{container_name}'.  Skipping this upload."
+                st.success(txt)
+                state('logger').success(txt)
+                return "EXISTS"
+            else:
+                txt = f"Uploading '{match}' to Azure Storage container '{container_name}'"
+                st.success(txt)
+                state('logger').success(txt)
 
-#                 # Upload the file
-#                 with open(file=local_storage_path, mode="rb") as data:
-#                     blob_client.upload_blob(data)
-#                 return "COPIED"
+                # Upload the file
+                with open(file=local_storage_path, mode="rb") as data:
+                    blob_client.upload_blob(data)
+                return "COPIED"
 
-#         else:
-#             txt = f"No container available for uploading '{match}' to Azure Storage!'"
-#             st.error(txt)
-#             state('logger').error(txt)
-#             return False
+        else:
+            txt = f"No container available for uploading '{match}' to Azure Storage!'"
+            st.error(txt)
+            state('logger').error(txt)
+            return False
 
-#     except Exception as ex:
-#         state('logger').critical(ex)
-#         st.exception(ex)
-#         pass
+    except Exception as ex:
+        state('logger').critical(ex)
+        st.exception(ex)
+        pass
 
 
 # Helper function to display message in the SnackBar
