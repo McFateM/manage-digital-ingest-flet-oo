@@ -44,22 +44,26 @@ class AboutView(BaseView):
 
         # Get all session keys and values
         for key in self.page.session.get_keys():
-            session_report += f"**{key}**: `{self.page.session.get(key)}`\n\n"
+            value = self.page.session.get(key)
+            # Truncate long values for display
+            value_str = str(value)
+            if len(value_str) > 100:
+                value_str = value_str[:100] + "..."
+            session_report += f"**{key}**: `{value_str}`\n\n"
             session_data_found = True
         
         if not session_data_found:
-            session_report += "No session data found!\n\n"
+            session_report += "*No session data found!*\n\n"
         
         session_report += "---\n\n"
         session_report += "*This report shows all key-value pairs stored in `page.session`.*"
 
         # Create a Markdown widget with the session report
-        md_widget = ft.Markdown(session_report, 
-            md_style_sheet=ft.MarkdownStyleSheet(
-                blockquote_text_style=ft.TextStyle(bgcolor=colors['markdown_bg'], color=colors['markdown_text'], size=16, weight=ft.FontWeight.BOLD),
-                p_text_style=ft.TextStyle(color=colors['primary_text'], size=16, weight=ft.FontWeight.NORMAL),
-                code_text_style=ft.TextStyle(color=colors['code_text'], size=16, weight=ft.FontWeight.BOLD),
-            )
+        md_widget = ft.Markdown(
+            session_report,
+            selectable=True,
+            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+            auto_follow_links=False,
         )  
 
         # Read config from _data/config.json
@@ -69,20 +73,21 @@ class AboutView(BaseView):
             scroll=ft.ScrollMode.AUTO,
             spacing=4,
             expand=True,
-            alignment=ft.MainAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Container(
-                    height=8,
-                ),
+                ft.Container(height=8),
                 ft.Image(
-                    src='Primary_Libraries.png',  # Updated to Grinnell College Libraries logo
+                    src='assets/Primary_Libraries.png',  # Grinnell College Libraries logo
                     fit=ft.ImageFit.CONTAIN,
                     width=400,
                 ),
-                ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍", color=colors['secondary_text']),
-                ft.Text("Manage Digital Ingest: a Flet Multi-Page App", size=35),
-                ft.Markdown("A Flet Python app for managing Grinnell College ingest of digital objects to Alma or CollectionBuilder"),
+                ft.Text(f"🚀 powered by Flet {config['flet_version']} and Python version {config['python_version']} 🐍", 
+                       color=colors['secondary_text']),
+                ft.Text("Manage Digital Ingest: a Flet Multi-Page App", 
+                       size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("A Flet Python app for managing Grinnell College ingest of digital objects to Alma or CollectionBuilder",
+                       size=14, color=colors['secondary_text']),
                 ft.Divider(height=15, color=colors['divider']),
                 md_widget,
                 ft.Divider(height=15, color=colors['divider']),
@@ -91,10 +96,6 @@ class AboutView(BaseView):
                     ft.ElevatedButton("Log WARNING", on_click=_log_warn),
                     ft.ElevatedButton("Log ERROR", on_click=_log_error),
                 ], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Divider(height=15, color=colors['divider']),
-                ft.Container(
-                    height=60,
-                    content=ft.Markdown("**Thanks for choosing Flet!**"),
-                ),
+                ft.Container(height=20),
             ],
         )

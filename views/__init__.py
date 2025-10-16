@@ -17,6 +17,7 @@ from .file_selector_view import (
 from .derivatives_view import DerivativesView
 from .storage_view import StorageView
 from .instructions_view import InstructionsView
+from .update_csv_view import UpdateCSVView
 from .log_view import LogView
 from .log_overlay import LogOverlay
 
@@ -32,6 +33,7 @@ __all__ = [
     'DerivativesView',
     'StorageView',
     'InstructionsView',
+    'UpdateCSVView',
     'LogView',
     'LogOverlay'
 ]

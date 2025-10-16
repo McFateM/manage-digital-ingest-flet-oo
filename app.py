@@ -12,7 +12,7 @@ from logger import SnackBarHandler
 from views import (
     HomeView, AboutView, SettingsView, ExitView,
     FilePickerSelectorView, CSVSelectorView,
-    DerivativesView, StorageView, LogView, InstructionsView
+    DerivativesView, StorageView, LogView, InstructionsView, UpdateCSVView
 )
 import utils
 
@@ -104,6 +104,7 @@ class MDIApplication:
             "/create_derivatives": DerivativesView(page),
             "/azure_storage": StorageView(page),
             "/show_instructions": InstructionsView(page),
+            "/update_csv": UpdateCSVView(page),
             "/show_logs": LogView(page),
         }
     
@@ -124,6 +125,9 @@ class MDIApplication:
         
         def nav_show_instructions(e):
             page.go("/show_instructions")
+        
+        def nav_update_csv(e):
+            page.go("/update_csv")
         
         def nav_about(e):
             page.go("/about")
@@ -158,6 +162,7 @@ class MDIApplication:
                 ft.IconButton(ft.Icons.FILE_OPEN, tooltip="File Selector", on_click=nav_file_selector),
                 ft.IconButton(ft.Icons.AUTO_FIX_HIGH, tooltip="Create Derivatives", on_click=nav_create_derivatives),
                 ft.IconButton(ft.Icons.CLOUD_UPLOAD, tooltip="Azure Storage", on_click=nav_azure_storage),
+                ft.IconButton(ft.Icons.TABLE_CHART, tooltip="Update CSV", on_click=nav_update_csv),
                 ft.IconButton(ft.Icons.INTEGRATION_INSTRUCTIONS_ROUNDED, tooltip="Show Final Instructions", on_click=nav_show_instructions),
                 # Vertical separator before the Exit icon
                 ft.Container(

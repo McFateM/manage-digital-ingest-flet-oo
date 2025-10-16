@@ -7,6 +7,7 @@ and scripts based on the current mode.
 
 import flet as ft
 from views.base_view import BaseView
+import os
 
 
 class InstructionsView(BaseView):
@@ -27,7 +28,7 @@ class InstructionsView(BaseView):
         """
         colors = self.get_theme_colors()
         
-        return [
+        instructions = [
             ft.Text("Alma Workflow Instructions", 
                    size=20, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
             ft.Container(height=10),
@@ -56,7 +57,38 @@ class InstructionsView(BaseView):
                    size=14, color=colors['secondary_text']),
             ft.Text("• Ensure all files are properly linked", 
                    size=14, color=colors['secondary_text']),
+            ft.Container(height=20),
         ]
+        
+        # Read and display the alma_aws_s3.md file
+        alma_md_path = os.path.join("_data", "alma_aws_s3.md")
+        if os.path.exists(alma_md_path):
+            try:
+                with open(alma_md_path, 'r', encoding='utf-8') as f:
+                    md_content = f.read()
+                
+                # Add a Markdown control to display the file content
+                instructions.append(
+                    ft.Markdown(
+                        md_content,
+                        selectable=True,
+                        extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+                        on_tap_link=lambda e: self.page.launch_url(e.data),
+                    )
+                )
+            except Exception as e:
+                self.logger.error(f"Failed to read alma_aws_s3.md: {e}")
+                instructions.append(
+                    ft.Text(f"Error loading AWS S3 instructions: {e}", 
+                           size=12, color=ft.Colors.RED_600)
+                )
+        else:
+            instructions.append(
+                ft.Text("AWS S3 instructions file not found.", 
+                       size=12, color=ft.Colors.ORANGE_600)
+            )
+        
+        return instructions
     
     def get_collectionbuilder_instructions(self) -> list:
         """
