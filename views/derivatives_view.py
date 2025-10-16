@@ -476,13 +476,9 @@ class DerivativesView(BaseView):
             visible=self.processing  # Initially hidden unless already processing
         )
         
-        # Build the layout
+        # Build the layout controls list
         layout_controls = [
-            ft.Row([
-                ft.Text("Derivatives Creation", size=24, weight=ft.FontWeight.BOLD),
-                self.create_log_button("Show Logs", ft.Icons.LIST_ALT)
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Divider(height=15, color=colors['divider']),
+            *self.create_page_header("Derivatives Creation"),
             
             # Status information
             ft.Container(

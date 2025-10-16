@@ -282,15 +282,14 @@ class SettingsView(BaseView):
         )
         
         return ft.Column([
-            ft.Text("Settings Page", size=24, weight=ft.FontWeight.BOLD),
-            ft.Divider(height=15, color=colors['divider']),
+            *self.create_page_header("Settings Page", include_log_button=False),
             mode_settings_container,
             file_selector_settings_container,
             storage_settings_container,
             collection_settings_container,
             ft.Divider(height=15, color=colors['divider']),
             theme_settings_container
-        ], alignment="center")
+        ], alignment="start", spacing=0)
     
     def log_all_current_selections(self):
         """Log all current selections in one summary"""

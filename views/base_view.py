@@ -73,6 +73,32 @@ class BaseView(ABC):
             on_click=lambda e: log_overlay.show()
         )
     
+    def create_page_header(self, title: str, include_log_button: bool = True) -> list:
+        """
+        Create a standard page header with title, optional log button, and red divider.
+        
+        Args:
+            title (str): The page title text
+            include_log_button (bool): Whether to include the log button (default: True)
+            
+        Returns:
+            list: List of UI controls for the header
+        """
+        colors = self.get_theme_colors()
+        
+        if include_log_button:
+            header_row = ft.Row([
+                ft.Text(title, size=24, weight=ft.FontWeight.BOLD),
+                self.create_log_button("Show Logs", ft.Icons.LIST_ALT)
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        else:
+            header_row = ft.Text(title, size=24, weight=ft.FontWeight.BOLD)
+        
+        return [
+            header_row,
+            ft.Divider(height=15, color=colors['divider'])
+        ]
+    
     @abstractmethod
     def render(self) -> ft.Column:
         """
