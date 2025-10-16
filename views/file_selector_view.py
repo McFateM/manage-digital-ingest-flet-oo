@@ -636,6 +636,84 @@ class CSVSelectorView(FileSelectorView):
         except Exception as e:
             self.logger.error(f"Failed to save last directory: {e}")
     
+    def sanitize_filename(self, filename):
+        """
+        Sanitize a filename by replacing spaces and special characters.
+        
+        Args:
+            filename: The filename to sanitize
+            
+        Returns:
+            str: Sanitized filename
+        """
+        # Replace spaces with underscores
+        sanitized = filename.replace(' ', '_')
+        # Remove or replace other problematic characters
+        sanitized = re.sub(r'[^\w\-_\.]', '_', sanitized)
+        return sanitized
+    
+    def copy_csv_to_temp(self, source_path):
+        """
+        Copy CSV file to temporary directory with human-readable timestamp.
+        
+        Args:
+            source_path: Path to the source CSV file
+            
+        Returns:
+            str: Path to the copied CSV file, or None if copy failed
+        """
+        try:
+            # Get temp directory from session, or create a new one if it doesn't exist
+            temp_dir = self.page.session.get("temp_directory")
+            
+            if not temp_dir or not os.path.exists(temp_dir):
+                # Create a new temp directory structure
+                temp_base_dir = os.path.join(os.getcwd(), "storage", "temp")
+                os.makedirs(temp_base_dir, exist_ok=True)
+                
+                # Create a unique subdirectory for this session
+                session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
+                temp_dir = os.path.join(temp_base_dir, f"file_selector_{session_id}")
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                # Create subdirectories
+                objs_dir = os.path.join(temp_dir, "OBJS")
+                tn_dir = os.path.join(temp_dir, "TN")
+                small_dir = os.path.join(temp_dir, "SMALL")
+                os.makedirs(objs_dir, exist_ok=True)
+                os.makedirs(tn_dir, exist_ok=True)
+                os.makedirs(small_dir, exist_ok=True)
+                
+                # Store in session
+                self.page.session.set("temp_directory", temp_dir)
+                self.page.session.set("temp_objs_directory", objs_dir)
+                self.page.session.set("temp_tn_directory", tn_dir)
+                self.page.session.set("temp_small_directory", small_dir)
+                
+                self.logger.info(f"Created temporary directory structure: {temp_dir}")
+            
+            # Get the base filename and sanitize it
+            base_name = os.path.basename(source_path)
+            name, ext = os.path.splitext(base_name)
+            sanitized_name = self.sanitize_filename(name)
+            
+            # Add human-readable timestamp: YYYYMMDD_HHMMSS
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            new_filename = f"{sanitized_name}_{timestamp}{ext}"
+            
+            # Create the destination path
+            dest_path = os.path.join(temp_dir, new_filename)
+            
+            # Copy the file
+            shutil.copy2(source_path, dest_path)
+            self.logger.info(f"Copied CSV file to: {dest_path}")
+            
+            return dest_path
+            
+        except Exception as e:
+            self.logger.error(f"Failed to copy CSV file: {e}")
+            return None
+    
     def read_csv_file(self, file_path):
         """
         Read CSV or Excel file and extract column headers.
@@ -1164,6 +1242,15 @@ class CSVSelectorView(FileSelectorView):
             directory = os.path.dirname(file_path)
             self.save_last_directory(directory)
             
+            # Create a working copy of the CSV file in temp directory
+            temp_csv_path = self.copy_csv_to_temp(file_path)
+            if temp_csv_path:
+                self.page.session.set("temp_csv_file", temp_csv_path)
+                self.logger.info(f"Created working copy at: {temp_csv_path}")
+            else:
+                self.page.session.set("temp_csv_file", None)
+                self.logger.warning("No working copy created - temp directory not available")
+            
             # Read columns
             columns, error = self.read_csv_file(file_path)
             
@@ -1192,6 +1279,7 @@ class CSVSelectorView(FileSelectorView):
     def on_clear_csv_selection(self, e):
         """Clear CSV selection."""
         self.page.session.set("selected_csv_file", None)
+        self.page.session.set("temp_csv_file", None)
         self.page.session.set("csv_columns", None)
         self.page.session.set("selected_csv_column", None)
         self.page.session.set("csv_read_error", None)
