@@ -822,6 +822,9 @@ class CSVSelectorView(FileSelectorView):
         current_selected_column = self.page.session.get("selected_csv_column")
         current_csv_error = self.page.session.get("csv_read_error")
         search_directory = self.page.session.get("search_directory")
+        csv_validation_passed = self.page.session.get("csv_validation_passed")
+        csv_validation_error = self.page.session.get("csv_validation_error")
+        csv_unmatched_headings = self.page.session.get("csv_unmatched_headings") or []
         
         # Update container visibility
         self.file_selection_container.visible = True
@@ -858,9 +861,27 @@ class CSVSelectorView(FileSelectorView):
                 ], alignment=ft.MainAxisAlignment.START)
             ])
         
+        # Build subtitle for Step 1 with validation status
+        step1_subtitle = "Choose your CSV/Excel file"
+        if current_csv_file:
+            filename = os.path.basename(current_csv_file)
+            if csv_validation_passed:
+                # Validation passed
+                current_mode = self.page.session.get("selected_mode")
+                if csv_unmatched_headings and current_mode == 'CollectionBuilder':
+                    step1_subtitle = f"✅ Selected: {filename} (validated, {len(csv_unmatched_headings)} extra heading(s))"
+                else:
+                    step1_subtitle = f"✅ Selected: {filename} (validated)"
+            elif csv_validation_passed is False:
+                # Validation failed
+                step1_subtitle = f"❌ Selected: {filename} (validation failed)"
+            else:
+                # No validation attempted
+                step1_subtitle = f"✅ Selected: {filename}"
+        
         self.file_selection_container.content = ft.ExpansionTile(
             title=ft.Text("File Selection", weight=ft.FontWeight.BOLD),
-            subtitle=ft.Text(f"✅ Selected: {os.path.basename(current_csv_file)}" if current_csv_file else "Choose your CSV/Excel file"),
+            subtitle=ft.Text(step1_subtitle),
             leading=ft.Icon(ft.Icons.FILE_UPLOAD),
             initially_expanded=not bool(current_csv_file),
             controls=[file_selection_content]
@@ -873,8 +894,31 @@ class CSVSelectorView(FileSelectorView):
             if current_csv_error:
                 columns_content.controls.extend([
                     ft.Text("❌ Error reading file:", size=14, weight=ft.FontWeight.BOLD, color=colors['error']),
-                    ft.Text(current_csv_error, size=12, color=colors['secondary_text'])
+                    ft.Text(current_csv_error, size=12, color=colors['error'])
                 ])
+                
+                # If validation failed, show unmatched headings
+                if csv_validation_passed is False and csv_unmatched_headings:
+                    columns_content.controls.extend([
+                        ft.Container(height=10),
+                        ft.Text("Unmatched headings:", size=13, weight=ft.FontWeight.BOLD, color=colors['error']),
+                        ft.Container(
+                            content=ft.Column([
+                                ft.Text(f"• {heading}", size=12, color=colors['secondary_text'])
+                                for heading in sorted(csv_unmatched_headings)
+                            ], spacing=2),
+                            padding=10,
+                            bgcolor=colors['container_bg'],
+                            border_radius=5
+                        ),
+                        ft.Container(height=5),
+                        ft.Text(
+                            "💡 Tip: These headings are not in the verified list. For Alma mode, all headings must match exactly.",
+                            size=11,
+                            italic=True,
+                            color=colors['secondary_text']
+                        )
+                    ])
 
             elif current_csv_columns and len(current_csv_columns) > 0:
                 
@@ -1236,6 +1280,58 @@ class CSVSelectorView(FileSelectorView):
             directory = os.path.dirname(file_path)
             self.save_last_directory(directory)
             
+            # Validate CSV headings against verified headings for the current mode
+            current_mode = self.page.session.get("selected_mode")
+            csv_validation_passed = False
+            csv_validation_error = None
+            csv_unmatched_headings = []
+            
+            if current_mode:
+                is_valid, unmatched_headings, error = utils.validate_csv_headings(file_path, current_mode)
+                
+                if error:
+                    # Validation error (file not found, encoding issue, etc.)
+                    csv_validation_error = error
+                    self.logger.error(f"CSV validation error: {error}")
+                    self.page.session.set("csv_validation_passed", False)
+                    self.page.session.set("csv_validation_error", error)
+                    self.page.session.set("csv_unmatched_headings", [])
+                elif not is_valid:
+                    # Validation failed - unmatched headings found
+                    csv_validation_error = f"CSV contains {len(unmatched_headings)} unverified heading(s) for {current_mode} mode"
+                    csv_unmatched_headings = unmatched_headings
+                    self.logger.error(f"CSV validation failed: {csv_validation_error}")
+                    self.logger.error(f"Unmatched headings: {', '.join(unmatched_headings)}")
+                    self.page.session.set("csv_validation_passed", False)
+                    self.page.session.set("csv_validation_error", csv_validation_error)
+                    self.page.session.set("csv_unmatched_headings", unmatched_headings)
+                else:
+                    # Validation passed
+                    csv_validation_passed = True
+                    self.logger.info(f"✓ CSV validation passed for {current_mode} mode")
+                    if unmatched_headings:
+                        # CollectionBuilder mode - report extra headings but allow
+                        self.logger.warning(f"Note: CSV contains {len(unmatched_headings)} extra heading(s) not in verified list: {', '.join(unmatched_headings)}")
+                    self.page.session.set("csv_validation_passed", True)
+                    self.page.session.set("csv_validation_error", None)
+                    self.page.session.set("csv_unmatched_headings", unmatched_headings)
+            else:
+                # No mode selected - skip validation but allow processing
+                self.logger.warning("No mode selected - skipping CSV validation")
+                csv_validation_passed = True
+                self.page.session.set("csv_validation_passed", True)
+                self.page.session.set("csv_validation_error", "No mode selected")
+                self.page.session.set("csv_unmatched_headings", [])
+            
+            # If validation failed, stop processing and update display
+            if not csv_validation_passed:
+                # Still save the file path so user can see what failed
+                self.page.session.set("csv_columns", None)
+                self.page.session.set("csv_read_error", csv_validation_error)
+                self.page.session.set("temp_csv_file", None)
+                self.update_csv_display()
+                return
+            
             # Create a working copy of the CSV file in temp directory
             temp_csv_path = self.copy_csv_to_temp(file_path)
             if temp_csv_path:
@@ -1277,6 +1373,9 @@ class CSVSelectorView(FileSelectorView):
         self.page.session.set("csv_columns", None)
         self.page.session.set("selected_csv_column", None)
         self.page.session.set("csv_read_error", None)
+        self.page.session.set("csv_validation_passed", None)
+        self.page.session.set("csv_validation_error", None)
+        self.page.session.set("csv_unmatched_headings", None)
         self.page.session.set("selected_file_paths", [])
         self.page.session.set("search_directory", None)
         self.page.session.set("original_filename_count", None)
