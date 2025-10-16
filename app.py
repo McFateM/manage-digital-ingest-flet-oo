@@ -36,19 +36,22 @@ class MDIApplication:
     def setup_logging(self):
         """Setup logging configuration."""
         logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+        
+        # Get the root logger so all child loggers inherit handlers
+        root_logger = logging.getLogger()
         self.logger = logging.getLogger(__name__)
         
-        # Setup snackbar handler
+        # Setup snackbar handler on ROOT logger so all views can use it
         self._snack_handler = SnackBarHandler()
         self._snack_handler.setLevel(logging.INFO)
-        self.logger.addHandler(self._snack_handler)
+        root_logger.addHandler(self._snack_handler)
         
         # File logging: write messages to mdi.log in the repo root
         _file_handler = logging.FileHandler("mdi.log")
         _file_handler.setLevel(logging.INFO)
         _file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         _file_handler.setFormatter(_file_formatter)
-        self.logger.addHandler(_file_handler)
+        root_logger.addHandler(_file_handler)
         
         # Write an initial log entry
         self.logger.info("Logger initialized - writing to mdi.log and SnackBarHandler attached")
@@ -251,6 +254,12 @@ class MDIApplication:
         
         # Enable page-level scrolling
         page.scroll = ft.ScrollMode.AUTO
+        
+        # Initialize a persistent snackbar for the app
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(""),
+            bgcolor=ft.Colors.GREEN_600
+        )
         
         # Initialize views
         self.initialize_views(page)

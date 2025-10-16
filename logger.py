@@ -15,6 +15,16 @@ class SnackBarHandler(logging.Handler):
         super().__init__(level)
         self._page = None
 
+    @property
+    def page(self):
+        """Get the page reference."""
+        return self._page
+    
+    @page.setter
+    def page(self, value):
+        """Set the page reference."""
+        self._page = value
+
     def set_page(self, page: ft.Page):
         """Give the handler a reference to the Flet page so it can show SnackBars."""
         self._page = page
@@ -23,12 +33,18 @@ class SnackBarHandler(logging.Handler):
         try:
             msg = self.format(record)
             page = getattr(record, 'page', None) or self._page
+            
+            # Debug: print to console
+            print(f"[SnackBarHandler] Level: {record.levelno}, Page: {page is not None}, Message: {msg}")
+            
             if page is None:
                 # No page available; nothing we can do
+                print("[SnackBarHandler] No page reference available!")
                 return
 
             # Ensure a snack_bar exists on the page
             if not hasattr(page, 'snack_bar') or page.snack_bar is None:
+                print("[SnackBarHandler] Creating new snackbar")
                 page.snack_bar = ft.SnackBar(content=ft.Text(msg))
 
             # Only show warnings and errors in snackbar
@@ -38,10 +54,14 @@ class SnackBarHandler(logging.Handler):
                     bgcolor = ft.Colors.RED_600
                 else:
                     bgcolor = ft.Colors.ORANGE_400
-                    
+                
+                print(f"[SnackBarHandler] Showing snackbar with bgcolor={bgcolor}")
                 page.snack_bar.content.value = msg
                 page.snack_bar.bgcolor = bgcolor
                 page.open(page.snack_bar)
                 page.update()
-        except Exception:
+            else:
+                print(f"[SnackBarHandler] Not showing snackbar (level {record.levelno} < WARNING)")
+        except Exception as e:
+            print(f"[SnackBarHandler] ERROR: {e}")
             self.handleError(record)

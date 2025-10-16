@@ -238,11 +238,15 @@ def show_message(page, text, is_error=False):
         logger.error(text)
     else:
         logger.info(text)
-        
+    
+    # Ensure snackbar exists
+    if not hasattr(page, 'snack_bar') or page.snack_bar is None:
+        page.snack_bar = ft.SnackBar(content=ft.Text(text))
+    
     page.snack_bar.content.value = text
     page.snack_bar.bgcolor = ft.Colors.RED_600 if is_error else ft.Colors.GREEN_600
     page.open(page.snack_bar)
-    page.update( )
+    page.update()
 
 
 # Validate CSV headings against verified heading files
