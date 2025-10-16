@@ -1,9 +1,8 @@
 """
 File Selector View for Manage Digital Ingest Application
 
-This module contains the base FileSelectorView class and three specific implementations:
+This module contains the base FileSelectorView class and two specific implementations:
 - FilePickerSelectorView: For file picker functionality
-- GoogleSheetSelectorView: For Google Sheet functionality
 - CSVSelectorView: For CSV file functionality
 """
 
@@ -30,7 +29,7 @@ class FileSelectorView(BaseView):
         
         Args:
             page: The Flet page object
-            selector_type: The type of selector (e.g., "FilePicker", "Google Sheet", "CSV")
+            selector_type: The type of selector (e.g., "FilePicker", "CSV")
         """
         super().__init__(page)
         self.selector_type = selector_type
@@ -576,60 +575,6 @@ class FilePickerSelectorView(FileSelectorView):
             )
             self.page.snack_bar.open = True
             self.page.update()
-
-
-class GoogleSheetSelectorView(FileSelectorView):
-    """
-    Google Sheet implementation of the file selector view.
-    Handles file selection from Google Sheets.
-    """
-    
-    def __init__(self, page: ft.Page):
-        """Initialize the Google Sheet selector view."""
-        super().__init__(page, "Google Sheet")
-    
-    def render(self) -> ft.Column:
-        """
-        Render the Google Sheet selector view content.
-        
-        Returns:
-            ft.Column: The Google Sheet page layout
-        """
-        self.on_view_enter()
-        
-        # Get theme-appropriate colors
-        colors = self.get_theme_colors()
-        
-        # TODO: Implement Google Sheet functionality
-        # This should include:
-        # - Google Sheets API integration
-        # - Sheet selection
-        # - Data import from sheets
-        
-        return ft.Column([
-            ft.Row([
-                ft.Text(f"File Selector - {self.selector_type}", size=24, weight=ft.FontWeight.BOLD),
-                self.create_log_button("Show Logs", ft.Icons.LIST_ALT)
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-            ft.Container(height=15),
-            ft.Text("Import file list from a Google Sheet.",
-                   size=16, color=colors['primary_text']),
-            ft.Container(height=15),
-            ft.TextField(
-                label="Google Sheet URL",
-                hint_text="Enter Google Sheet URL here",
-                width=500
-            ),
-            ft.Container(height=15),
-            ft.ElevatedButton(
-                "Connect to Sheet",
-                icon=ft.Icons.CLOUD,
-                on_click=lambda e: self.logger.info("Google Sheet functionality to be implemented")
-            ),
-            ft.Container(height=15),
-            ft.Text("Sheet data will appear here.",
-                   size=14, color=colors['secondary_text'])
-        ], alignment="center")
 
 
 class CSVSelectorView(FileSelectorView):

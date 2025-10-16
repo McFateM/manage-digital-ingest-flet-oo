@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from logger import SnackBarHandler
 from views import (
     HomeView, AboutView, SettingsView, ExitView,
-    FilePickerSelectorView, GoogleSheetSelectorView, CSVSelectorView,
+    FilePickerSelectorView, CSVSelectorView,
     DerivativesView, StorageView, LogView, InstructionsView
 )
 import utils
@@ -86,8 +86,6 @@ class MDIApplication:
         # Return the appropriate view based on selection
         if selected_option == "FilePicker":
             return FilePickerSelectorView(page)
-        elif selected_option == "Google Sheet":
-            return GoogleSheetSelectorView(page)
         elif selected_option == "CSV":
             return CSVSelectorView(page)
         else:

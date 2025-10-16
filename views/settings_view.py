@@ -79,7 +79,7 @@ class SettingsView(BaseView):
             cb_collection_options = json.load(file)
         
         # File selector options (hardcoded as requested)
-        file_selector_options = ["FilePicker", "Google Sheet", "CSV"]
+        file_selector_options = ["FilePicker", "CSV"]
         
         # Log all available options
         self.logger.info(f"Available mode options: {mode_options}")

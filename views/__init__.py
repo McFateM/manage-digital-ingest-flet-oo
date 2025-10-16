@@ -12,7 +12,6 @@ from .exit_view import ExitView
 from .file_selector_view import (
     FileSelectorView,
     FilePickerSelectorView,
-    GoogleSheetSelectorView,
     CSVSelectorView
 )
 from .derivatives_view import DerivativesView
@@ -29,7 +28,6 @@ __all__ = [
     'ExitView',
     'FileSelectorView',
     'FilePickerSelectorView',
-    'GoogleSheetSelectorView',
     'CSVSelectorView',
     'DerivativesView',
     'StorageView',

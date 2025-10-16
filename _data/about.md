@@ -6,9 +6,9 @@
   - an `Azure Blob Storage` selector,  
   - object file selection via...  
     - a system file picker pop-up, or  
-    - ability to read a list of digital object filenames from a Google Sheet or CSV file,  
+    - ability to read a list of digital object filenames from a CSV file,  
       - coupled with a "fuzzy" network file search utility, and
-      - automatic update of Google Sheet or CSV with revised file names and paths,
+      - automatic update of CSV with revised file names and paths,
   - an optional derivative (thumbnails, small images, etc.) creation utility, and
   - automatic naming and transport of files to Azure storage.
 
