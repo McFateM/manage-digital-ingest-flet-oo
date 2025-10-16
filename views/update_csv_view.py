@@ -11,6 +11,7 @@ import os
 import shutil
 import pandas as pd
 from datetime import datetime
+import utils
 
 
 class UpdateCSVView(BaseView):
@@ -27,23 +28,6 @@ class UpdateCSVView(BaseView):
         self.temp_csv_path = None
         self.selected_column = None
         self.data_table = None
-    
-    def sanitize_filename(self, filename):
-        """
-        Sanitize a filename by replacing spaces and special characters.
-        
-        Args:
-            filename: The filename to sanitize
-            
-        Returns:
-            str: Sanitized filename
-        """
-        import re
-        # Replace spaces with underscores
-        sanitized = filename.replace(' ', '_')
-        # Remove or replace other problematic characters
-        sanitized = re.sub(r'[^\w\-_\.]', '_', sanitized)
-        return sanitized
     
     def copy_csv_to_temp(self, source_path):
         """
@@ -67,7 +51,7 @@ class UpdateCSVView(BaseView):
             # Get the base filename and sanitize it
             base_name = os.path.basename(source_path)
             name, ext = os.path.splitext(base_name)
-            sanitized_name = self.sanitize_filename(name)
+            sanitized_name = utils.sanitize_filename(name)
             
             # Add timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -323,8 +307,8 @@ class UpdateCSVView(BaseView):
                 )
             ], alignment="start", expand=True, spacing=0)
         
-        # Get CSV file path from session
-        original_csv_path = self.page.session.get("csv_file_path")
+        # Get CSV file path from session (set by FileSelector)
+        original_csv_path = self.page.session.get("selected_csv_file")
         
         # Check if no CSV file is selected (FilePicker was used)
         if not original_csv_path:
@@ -364,14 +348,23 @@ class UpdateCSVView(BaseView):
         
         # Automatically load CSV if not already loaded
         if self.csv_data is None and original_csv_path:
-            # Copy to temp directory
-            self.temp_csv_path = self.copy_csv_to_temp(original_csv_path)
+            # Check if FileSelector already created a temp copy
+            temp_csv_from_selector = self.page.session.get("temp_csv_file")
+            
+            if temp_csv_from_selector and os.path.exists(temp_csv_from_selector):
+                # Use the existing temp copy from FileSelector
+                self.temp_csv_path = temp_csv_from_selector
+                self.logger.info(f"Using existing temp CSV from FileSelector: {self.temp_csv_path}")
+            else:
+                # Create our own temp copy (fallback for backward compatibility)
+                self.temp_csv_path = self.copy_csv_to_temp(original_csv_path)
+                if not self.temp_csv_path:
+                    self.logger.error("Failed to copy CSV to temp directory")
+            
+            # Load the CSV data
             if self.temp_csv_path:
-                # Load the CSV data
                 if not self.load_csv_data(self.temp_csv_path):
                     self.logger.error("Failed to load CSV file")
-            else:
-                self.logger.error("Failed to copy CSV to temp directory")
         
         # Column selector dropdown
         column_selector = None

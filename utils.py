@@ -43,6 +43,28 @@ def calculate_string_similarity(str1, str2):
     
     return int((common_chars / total_chars) * 100)
 
+def sanitize_filename(filename):
+    """
+    Sanitize a filename by replacing spaces and special characters.
+    
+    Args:
+        filename: The filename to sanitize
+        
+    Returns:
+        str: Sanitized filename with spaces replaced by underscores,
+             special characters removed, and hyphens cleaned up
+    """
+    import re
+    # Replace spaces with underscores
+    sanitized = filename.replace(' ', '_')
+    # Remove or replace other problematic characters (keep word chars, hyphens, underscores, dots)
+    sanitized = re.sub(r'[^\w\-_\.]', '_', sanitized)
+    # Clean up multiple underscores around hyphens: _-_ or -_ or _- becomes just -
+    sanitized = re.sub(r'_*-_*', '-', sanitized)
+    # Clean up any remaining multiple consecutive underscores
+    sanitized = re.sub(r'_+', '_', sanitized)
+    return sanitized
+
 def perform_fuzzy_search(base_path, target_filename, threshold=90):
     """
     Recursively search for files in base_path and find the best match for target_filename

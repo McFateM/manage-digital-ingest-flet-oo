@@ -92,29 +92,39 @@ class FileSelectorView(BaseView):
             return [], [], None
         
         try:
-            # Create base temp directory if it doesn't exist
-            temp_base_dir = os.path.join(os.getcwd(), "storage", "temp")
-            os.makedirs(temp_base_dir, exist_ok=True)
+            # Check if temp directory already exists in session (e.g., from CSV selection)
+            temp_dir = self.page.session.get("temp_directory")
             
-            # Create a unique subdirectory for this session
-            session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
-            temp_dir = os.path.join(temp_base_dir, f"file_selector_{session_id}")
-            os.makedirs(temp_dir, exist_ok=True)
+            if not temp_dir or not os.path.exists(temp_dir):
+                # Create base temp directory if it doesn't exist
+                temp_base_dir = os.path.join(os.getcwd(), "storage", "temp")
+                os.makedirs(temp_base_dir, exist_ok=True)
+                
+                # Create a unique subdirectory for this session
+                session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
+                temp_dir = os.path.join(temp_base_dir, f"file_selector_{session_id}")
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                self.logger.info(f"Created new temporary directory: {temp_dir}")
+            else:
+                self.logger.info(f"Reusing existing temporary directory: {temp_dir}")
             
-            # Create OBJS subdirectory for source files
+            # Create or verify OBJS subdirectory for source files
             objs_dir = os.path.join(temp_dir, "OBJS")
             os.makedirs(objs_dir, exist_ok=True)
             
-            # Create TN and SMALL subdirectories for derivatives
+            # Create or verify TN and SMALL subdirectories for derivatives
             tn_dir = os.path.join(temp_dir, "TN")
             small_dir = os.path.join(temp_dir, "SMALL")
             os.makedirs(tn_dir, exist_ok=True)
             os.makedirs(small_dir, exist_ok=True)
             
-            self.logger.info(f"Created temporary directory structure: {temp_dir}")
-            self.logger.info(f"  - OBJS/: {objs_dir}")
-            self.logger.info(f"  - TN/: {tn_dir}")
-            self.logger.info(f"  - SMALL/: {small_dir}")
+            # Only log directory structure if we just created it
+            temp_was_already_set = bool(self.page.session.get("temp_directory"))
+            if not temp_was_already_set:
+                self.logger.info(f"  - OBJS/: {objs_dir}")
+                self.logger.info(f"  - TN/: {tn_dir}")
+                self.logger.info(f"  - SMALL/: {small_dir}")
             
             temp_file_paths = []
             temp_file_info = []
@@ -636,22 +646,6 @@ class CSVSelectorView(FileSelectorView):
         except Exception as e:
             self.logger.error(f"Failed to save last directory: {e}")
     
-    def sanitize_filename(self, filename):
-        """
-        Sanitize a filename by replacing spaces and special characters.
-        
-        Args:
-            filename: The filename to sanitize
-            
-        Returns:
-            str: Sanitized filename
-        """
-        # Replace spaces with underscores
-        sanitized = filename.replace(' ', '_')
-        # Remove or replace other problematic characters
-        sanitized = re.sub(r'[^\w\-_\.]', '_', sanitized)
-        return sanitized
-    
     def copy_csv_to_temp(self, source_path):
         """
         Copy CSV file to temporary directory with human-readable timestamp.
@@ -695,7 +689,7 @@ class CSVSelectorView(FileSelectorView):
             # Get the base filename and sanitize it
             base_name = os.path.basename(source_path)
             name, ext = os.path.splitext(base_name)
-            sanitized_name = self.sanitize_filename(name)
+            sanitized_name = utils.sanitize_filename(name)
             
             # Add human-readable timestamp: YYYYMMDD_HHMMSS
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
