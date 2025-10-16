@@ -553,12 +553,7 @@ class FilePickerSelectorView(FileSelectorView):
         """Handle creating symbolic links to files in temporary directory."""
         file_paths = self.page.session.get("selected_file_paths") or []
         if not file_paths:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("No files selected to link"),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
+            self.show_snack("No files selected to link", is_error=True)
             return
         
         self.logger.info(f"Creating symbolic links for {len(file_paths)} files in temporary directory...")
@@ -569,22 +564,12 @@ class FilePickerSelectorView(FileSelectorView):
             self.page.session.set("selected_file_paths", temp_files)
         
         if temp_files:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Successfully created {len(temp_files)} symbolic links in temporary directory"),
-                bgcolor=ft.Colors.GREEN_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
+            self.show_snack(f"Successfully created {len(temp_files)} symbolic links in temporary directory")
             
             # Refresh the view to show updated button states
             self.page.go("/file_selector")
         else:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Failed to create symbolic links in temporary directory"),
-                bgcolor=ft.Colors.RED_400
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
+            self.show_snack("Failed to create symbolic links in temporary directory", is_error=True)
 
 
 class CSVSelectorView(FileSelectorView):
@@ -1081,12 +1066,7 @@ class CSVSelectorView(FileSelectorView):
                             clipboard_text = "\n".join(clipboard_lines)
                             self.page.set_clipboard(clipboard_text)
                             self.logger.info(f"Copied {len(clipboard_lines)} matched filenames to clipboard")
-                            self.page.snack_bar = ft.SnackBar(
-                                content=ft.Text(f"Copied {len(clipboard_lines)} matched filenames to clipboard"),
-                                bgcolor=ft.Colors.GREEN_600
-                            )
-                            self.page.snack_bar.open = True
-                            self.page.update()
+                            self.show_snack(f"Copied {len(clipboard_lines)} matched filenames to clipboard")
                     
                     search_content_column.controls.append(ft.Container(height=10))
                     search_content_column.controls.append(
@@ -1148,12 +1128,7 @@ class CSVSelectorView(FileSelectorView):
                             clipboard_text = "\n".join(unmatched)
                             self.page.set_clipboard(clipboard_text)
                             self.logger.info(f"Copied {len(unmatched)} unmatched filenames to clipboard")
-                            self.page.snack_bar = ft.SnackBar(
-                                content=ft.Text(f"Copied {len(unmatched)} unmatched filenames to clipboard"),
-                                bgcolor=ft.Colors.GREEN_600
-                            )
-                            self.page.snack_bar.open = True
-                            self.page.update()
+                            self.show_snack(f"Copied {len(unmatched)} unmatched filenames to clipboard")
                     
                     search_content_column.controls.append(ft.Container(height=10))
                     search_content_column.controls.append(

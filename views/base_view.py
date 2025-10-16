@@ -62,6 +62,25 @@ class BaseView(ABC):
                 'error': ft.Colors.RED_600  # Darker red for better visibility in light mode
             }
     
+    def show_snack(self, message: str, is_error: bool = False):
+        """
+        Show a snackbar message.
+        
+        Args:
+            message (str): The message to display
+            is_error (bool): Whether this is an error message (red) or success (green)
+        """
+        bgcolor = ft.Colors.RED_600 if is_error else ft.Colors.GREEN_600
+        
+        # Ensure snackbar exists
+        if not hasattr(self.page, 'snack_bar') or self.page.snack_bar is None:
+            self.page.snack_bar = ft.SnackBar(content=ft.Text(""))
+        
+        self.page.snack_bar.content.value = message
+        self.page.snack_bar.bgcolor = bgcolor
+        self.page.snack_bar.open = True
+        self.page.update()
+    
     def create_log_button(self, text="Show Logs", icon=ft.Icons.LIST_ALT):
         """Create a button that opens the log overlay"""
         from views.log_overlay import LogOverlay
