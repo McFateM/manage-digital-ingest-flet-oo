@@ -29,6 +29,7 @@ class UpdateCSVView(BaseView):
         self.temp_csv_path = None
         self.selected_column = None
         self.data_table = None
+        self.edits_applied = False  # Track whether any edits have been applied
     
     def copy_csv_to_temp(self, source_path):
         """
@@ -142,19 +143,34 @@ class UpdateCSVView(BaseView):
             self.logger.error(f"Error updating cell: {e}")
             return False
     
-    def apply_matched_files(self, e):
+    def apply_all_updates(self, e):
         """
-        Apply matched filenames to the CSV file.
+        Combined function that:
+        1. Applies matched filenames to existing rows
+        2. Appends a new row for the CSV file itself
+        3. Populates dginfo field for all rows with temp CSV filename
         """
         try:
-            # Get matched files from session
-            selected_files = self.page.session.get("selected_file_paths") or []
-            original_filenames = self.page.session.get("original_filenames") or []
+            # Get session data
+            temp_file_info = self.page.session.get("temp_file_info") or []
+            csv_filenames_for_matched = self.page.session.get("csv_filenames_for_matched") or []
+            temp_csv_filename = self.page.session.get("temp_csv_filename") or ""
+            original_csv_path = self.page.session.get("selected_csv_file") or ""
             
-            if not selected_files or not self.csv_data is not None:
-                self.logger.warning("No matched files or CSV data available")
+            if self.csv_data is None:
+                self.logger.warning("CSV data not loaded")
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("No matched files available to apply"),
+                    content=ft.Text("No CSV data available"),
+                    bgcolor=ft.Colors.ORANGE_600
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
+            
+            if not temp_csv_filename:
+                self.logger.warning("No temp CSV filename available")
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("No temporary CSV file data available"),
                     bgcolor=ft.Colors.ORANGE_600
                 )
                 self.page.snack_bar.open = True
@@ -173,39 +189,191 @@ class UpdateCSVView(BaseView):
                 self.page.update()
                 return
             
-            # Update the CSV with matched filenames
+            # Step 1: Update existing rows with matched sanitized filenames
             updates = 0
-            for i, original_name in enumerate(original_filenames):
-                if i < len(selected_files) and selected_files[i]:
-                    # Find the row with this original filename
-                    mask = self.csv_data[column_name] == original_name
+            if temp_file_info and csv_filenames_for_matched:
+                for idx, file_info in enumerate(temp_file_info):
+                    sanitized_filename = file_info.get('sanitized_filename', '')
+                    
+                    # Get the corresponding CSV filename if available
+                    if idx < len(csv_filenames_for_matched):
+                        csv_filename = csv_filenames_for_matched[idx]
+                    else:
+                        # Fall back to original_filename for file picker workflow
+                        csv_filename = file_info.get('original_filename', '')
+                    
+                    # Find the row with this CSV filename
+                    mask = self.csv_data[column_name] == csv_filename
                     if mask.any():
                         row_idx = self.csv_data[mask].index[0]
-                        new_filename = os.path.basename(selected_files[i])
-                        self.csv_data.at[row_idx, column_name] = new_filename
+                        # Replace with sanitized filename
+                        self.csv_data.at[row_idx, column_name] = sanitized_filename
                         updates += 1
+                        self.logger.info(f"Updated CSV: '{csv_filename}' -> '{sanitized_filename}'")
             
-            if updates > 0:
-                self.save_csv_data()
-                self.logger.info(f"Applied {updates} matched filenames to CSV")
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Updated {updates} filenames in CSV"),
-                    bgcolor=ft.Colors.GREEN_600
-                )
-                self.page.snack_bar.open = True
-                self.render_data_table()
-                self.page.update()
+            # Step 2: Append a new row for the CSV file itself
+            # Generate unique ID
+            unique_id = utils.generate_unique_id(self.page)
+            
+            # Create new row with all empty values first
+            new_row = {col: '' for col in self.csv_data.columns}
+            
+            # Populate specific columns
+            new_row['originating_system_id'] = unique_id
+            new_row['dc:identifier'] = unique_id
+            new_row['collection_id'] = '81342586470004641'
+            
+            # Use the original CSV basename for dc:title
+            original_csv_basename = os.path.basename(original_csv_path)
+            new_row['dc:title'] = original_csv_basename
+            
+            # For file_name_1, use the temp CSV filename
+            new_row['file_name_1'] = temp_csv_filename
+            
+            # Append the new row to the DataFrame
+            import pandas as pd
+            new_row_df = pd.DataFrame([new_row])
+            self.csv_data = pd.concat([self.csv_data, new_row_df], ignore_index=True)
+            
+            # Also update the original to match (so comparison logic doesn't break)
+            self.csv_data_original = pd.concat([self.csv_data_original, new_row_df], ignore_index=True)
+            
+            self.logger.info(f"Appended new row with ID: {unique_id}")
+            
+            # Step 3: Fill empty originating_system_id cells with unique IDs
+            filled_ids = 0
+            if 'originating_system_id' in self.csv_data.columns:
+                for idx in range(len(self.csv_data)):
+                    cell_value = self.csv_data.at[idx, 'originating_system_id']
+                    # Check if empty (empty string, None, or NaN)
+                    if pd.isna(cell_value) or str(cell_value).strip() == '':
+                        new_id = utils.generate_unique_id(self.page)
+                        self.csv_data.at[idx, 'originating_system_id'] = new_id
+                        # Also update dc:identifier if it exists and is empty
+                        if 'dc:identifier' in self.csv_data.columns:
+                            dc_id_value = self.csv_data.at[idx, 'dc:identifier']
+                            if pd.isna(dc_id_value) or str(dc_id_value).strip() == '':
+                                self.csv_data.at[idx, 'dc:identifier'] = new_id
+                        filled_ids += 1
+                        self.logger.info(f"Generated ID {new_id} for row {idx}")
+                if filled_ids > 0:
+                    self.logger.info(f"Filled {filled_ids} empty originating_system_id cell(s)")
             else:
-                self.logger.warning("No matching rows found to update")
+                self.logger.warning("originating_system_id column not found in CSV")
+            
+            # Step 4: Populate dginfo field for ALL rows with temp CSV filename
+            if 'dginfo' in self.csv_data.columns:
+                self.csv_data['dginfo'] = temp_csv_filename
+                # Also update original so dginfo doesn't show as changed
+                self.csv_data_original['dginfo'] = temp_csv_filename
+                self.logger.info(f"Set dginfo field to '{temp_csv_filename}' for all {len(self.csv_data)} rows")
+            else:
+                self.logger.warning("dginfo column not found in CSV")
+            
+            # Save the updated CSV
+            self.save_csv_data()
+            self.edits_applied = True
+            
+            # Update the data table display
+            if self.data_table:
+                new_table = self.render_data_table()
+                self.data_table.content = new_table.content
+                self.data_table.update()
+            
+            # Success message
+            message_parts = []
+            if updates > 0:
+                message_parts.append(f"Updated {updates} filename(s)")
+            message_parts.append(f"Added CSV row (ID: {unique_id})")
+            if filled_ids > 0:
+                message_parts.append(f"Generated {filled_ids} ID(s)")
+            message_parts.append(f"Set dginfo for all rows")
+            
+            self.logger.info("Apply All Updates completed successfully")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(" | ".join(message_parts)),
+                bgcolor=ft.Colors.GREEN_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+        except Exception as e:
+            self.logger.error(f"Error applying all updates: {e}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error: {str(e)}"),
+                bgcolor=ft.Colors.RED_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
+    def append_new_row(self, e):
+        """
+        Append a new row to the CSV with temporary file information.
+        Creates a unique ID and populates specific columns with temp file data.
+        Uses the temp CSV filename that was created by FileSelector.
+        """
+        try:
+            # Get CSV file info from session
+            temp_csv_filename = self.page.session.get("temp_csv_filename") or ""
+            original_csv_path = self.page.session.get("selected_csv_file") or ""
+            
+            if not temp_csv_filename or self.csv_data is None:
+                self.logger.warning("No temp CSV filename or CSV data not loaded")
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("No matching rows found to update"),
+                    content=ft.Text("No temporary CSV file data available"),
                     bgcolor=ft.Colors.ORANGE_600
                 )
                 self.page.snack_bar.open = True
                 self.page.update()
-                
+                return
+            
+            # Generate unique ID
+            unique_id = utils.generate_unique_id(self.page)
+            
+            # Create new row with all empty values first
+            new_row = {col: '' for col in self.csv_data.columns}
+            
+            # Populate specific columns
+            new_row['originating_system_id'] = unique_id
+            new_row['dc:identifier'] = unique_id
+            new_row['collection_id'] = '81342586470004641'
+            
+            # Use the original CSV basename for dc:title (without path or timestamp)
+            original_csv_basename = os.path.basename(original_csv_path)
+            new_row['dc:title'] = original_csv_basename
+            
+            # For file_name_1, use the temp CSV filename (the one copied to temp dir with timestamp)
+            new_row['file_name_1'] = temp_csv_filename
+            
+            # Append the new row to the DataFrame
+            import pandas as pd
+            new_row_df = pd.DataFrame([new_row])
+            self.csv_data = pd.concat([self.csv_data, new_row_df], ignore_index=True)
+            
+            # Also update the original to match (so comparison logic doesn't break)
+            # The new row should be considered as part of the "before" state now
+            self.csv_data_original = pd.concat([self.csv_data_original, new_row_df], ignore_index=True)
+            
+            # Save the updated CSV
+            self.save_csv_data()
+            self.edits_applied = True
+            
+            # Update the data table display
+            if self.data_table:
+                new_table = self.render_data_table()
+                self.data_table.content = new_table.content
+                self.data_table.update()
+            
+            self.logger.info(f"Appended new row with ID: {unique_id}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Added new row with ID: {unique_id}"),
+                bgcolor=ft.Colors.GREEN_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
         except Exception as e:
-            self.logger.error(f"Error applying matched files: {e}")
+            self.logger.error(f"Error appending new row: {e}")
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error: {str(e)}"),
                 bgcolor=ft.Colors.RED_600
@@ -216,9 +384,11 @@ class UpdateCSVView(BaseView):
     def render_data_table(self):
         """
         Render the CSV data as before/after comparison tables.
+        Before edits are applied, shows only the "Before" table full-width.
+        After edits, shows side-by-side "Before" and "After" tables.
         
         Returns:
-            ft.Container: Container with the before and after data tables
+            ft.Container: Container with the data table(s)
         """
         colors = self.get_theme_colors()
         
@@ -258,6 +428,49 @@ class UpdateCSVView(BaseView):
             data_row_max_height=35,
             heading_row_height=40,
         )
+        
+        # If no edits have been applied yet, show only the Before table full-width
+        if not self.edits_applied:
+            return ft.Container(
+                content=ft.Column([
+                    ft.Text(f"Showing first 5 of {len(self.csv_data)} rows",
+                           size=12, italic=True, color=colors['secondary_text']),
+                    ft.Container(
+                        content=ft.Column([
+                            ft.Text("CSV Data:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Row([before_table], scroll=ft.ScrollMode.AUTO)
+                                ], scroll=ft.ScrollMode.AUTO),
+                                border=ft.border.all(1, colors['border']),
+                                border_radius=10,
+                                padding=10,
+                            )
+                        ], spacing=5),
+                    ),
+                    # Show no changes yet
+                    ft.Container(
+                        content=ft.Text(
+                            "No changes applied yet. Click 'Apply Matched Files' to update the CSV.",
+                            size=13,
+                            italic=True,
+                            color=colors['secondary_text']
+                        ),
+                        padding=ft.padding.only(top=10),
+                    ),
+                ], spacing=10),
+                expand=True
+            )
+        
+        # After edits have been applied, show Before/After comparison
+        # Count total changes across all rows (not just displayed ones)
+        total_changes = 0
+        for idx in range(len(self.csv_data)):
+            for col in self.csv_data.columns:
+                original_val = str(self.csv_data_original.iloc[idx][col])
+                current_val = str(self.csv_data.iloc[idx][col])
+                if original_val != current_val:
+                    total_changes += 1
         
         # Create "After" table with changed cells highlighted
         after_columns = [
@@ -332,6 +545,16 @@ class UpdateCSVView(BaseView):
                         expand=1
                     ),
                 ], spacing=10, expand=True),
+                # Show change count
+                ft.Container(
+                    content=ft.Text(
+                        f"Total changes: {total_changes} cell{'s' if total_changes != 1 else ''} modified across {len(self.csv_data)} rows",
+                        size=13,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREEN_700 if total_changes > 0 else colors['secondary_text']
+                    ),
+                    padding=ft.padding.only(top=10),
+                ),
             ], spacing=10),
             expand=True
         )
@@ -491,9 +714,11 @@ class UpdateCSVView(BaseView):
         if self.csv_data is not None:
             button_row_controls.extend([
                 ft.ElevatedButton(
-                    button_text,
-                    icon=ft.Icons.UPDATE,
-                    on_click=self.apply_matched_files
+                    "Apply All Updates",
+                    icon=ft.Icons.PUBLISHED_WITH_CHANGES,
+                    on_click=self.apply_all_updates,
+                    bgcolor=ft.Colors.GREEN_700,
+                    color=ft.Colors.WHITE
                 ),
                 ft.ElevatedButton(
                     "Save CSV",
@@ -510,10 +735,12 @@ class UpdateCSVView(BaseView):
         
         # Data table section
         if self.csv_data is not None:
+            # Store the data table container so we can update it later
+            self.data_table = self.render_data_table()
             content.extend([
                 ft.Text("CSV Data:", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.Container(height=5),
-                self.render_data_table()
+                self.data_table
             ])
         else:
             content.append(

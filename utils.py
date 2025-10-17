@@ -8,6 +8,43 @@ from subprocess import call
 import json
 import sys
 import logging
+import time
+
+# Unique ID generation
+# ----------------------------------------------------------------------
+def generate_unique_id(page):
+    """
+    Generate a unique ID based on current epoch time.
+    Checks session storage to ensure no duplicates exist.
+    If a duplicate is found, increments the epoch value until unique.
+    
+    Args:
+        page: The Flet page object containing session data
+    
+    Returns:
+        str: Unique ID formatted as "dg_<epoch_time>"
+    
+    Example:
+        >>> generate_unique_id(page)
+        'dg_1729123456'
+    """
+    # Initialize the set of generated IDs in session if not present
+    if not hasattr(page.session, 'generated_ids'):
+        page.session.generated_ids = set()
+    
+    # Start with current epoch time
+    epoch_time = int(time.time())
+    unique_id = f"dg_{epoch_time}"
+    
+    # Increment until we find a unique ID
+    while unique_id in page.session.generated_ids:
+        epoch_time += 1
+        unique_id = f"dg_{epoch_time}"
+    
+    # Store the new ID in session
+    page.session.generated_ids.add(unique_id)
+    
+    return unique_id
 
 # Simple string matching functions
 # ----------------------------------------------------------------------
@@ -367,3 +404,48 @@ def validate_csv_headings(csv_file_path, mode):
             
     except Exception as e:
         return (False, [], f"Error validating CSV headings: {str(e)}")
+
+
+def generate_alma_s3_script(temp_directory):
+    """
+    Generate a personalized Alma AWS S3 upload script with the temp directory filled in.
+    
+    Args:
+        temp_directory: Path to the temporary directory containing OBJS folder
+        
+    Returns:
+        str: The bash script content with temp_directory replaced
+    """
+    script_template = """#!/bin/bash
+
+# Alma AWS S3 Upload Script
+# This script helps upload files from the temporary directory to Alma's AWS S3 storage
+# Replace <profile-id> and <import-id> with values from the Alma Digital Uploader
+
+# Step 1: Print the name and contents of the upload bucket
+echo "Step 1: Listing contents of Alma S3 upload bucket..."
+aws s3 ls s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/ --recursive
+
+echo ""
+echo "Copy/paste the '/<profile-id>/<import-id>/' portion from the output above"
+echo "Then edit this script and replace <profile-id> and <import-id> in the command below"
+echo ""
+read -p "Press Enter when ready to continue with the copy command..."
+
+# Step 2: Copy entire temporary directory to S3
+# Temporary directory: {temp_directory}
+echo ""
+echo "Step 2: Copying all files from temporary directory to Alma S3 storage..."
+aws s3 cp {temp_directory}/ s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/<profile-id>/<import-id>/ --recursive
+
+# Step 3: Verify the upload
+echo ""
+echo "Step 3: Verifying upload..."
+aws s3 ls s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/ --recursive
+
+echo ""
+echo "Once verified, return to Alma to complete the import operation"
+"""
+    
+    # Replace the temp_directory placeholder
+    return script_template.format(temp_directory=temp_directory)

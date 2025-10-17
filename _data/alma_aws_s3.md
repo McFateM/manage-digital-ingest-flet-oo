@@ -1,5 +1,5 @@
 
-# Suggested `aws s3...` commands that should be used as part of the Alma-D operation.
+# Suggested _aws s3..._ commands that should be used as part of the Alma-D operation
 
 Assuming a CSV file was selected for import (not the FilePicker option), and that CSV file contains updated identifiers and filepaths, use these `aws s3` commands to complete an import...  
 

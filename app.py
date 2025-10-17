@@ -242,6 +242,11 @@ class MDIApplication:
                 page.session.set(key, value)
                 self.logger.info(f"Initialized session '{key}' = '{value}' from persistent.json")
         
+        # Restore preserved session data if available
+        from views.about_view import AboutView
+        if AboutView.restore_session(page):
+            self.logger.info("Restored preserved session data")
+        
         # Set window dimensions
         page.window.height = window_height
         page.window.min_height = 500

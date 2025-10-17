@@ -188,6 +188,19 @@ class FileSelectorView(BaseView):
     
     def clear_temp_directory(self):
         """Clear the temporary directory and session data."""
+        # Check if temp directory is protected
+        import json
+        try:
+            persistent_file = "storage/data/persistent_session.json"
+            if os.path.exists(persistent_file):
+                with open(persistent_file, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                    if session_data.get("_temp_protected"):
+                        self.logger.info("Temporary directory is protected - skipping deletion")
+                        return
+        except Exception as e:
+            self.logger.warning(f"Could not check temp directory protection: {e}")
+        
         temp_dir = self.page.session.get("temp_directory")
         if temp_dir and os.path.exists(temp_dir):
             try:
@@ -1304,6 +1317,7 @@ class CSVSelectorView(FileSelectorView):
                 self.page.session.set("csv_columns", None)
                 self.page.session.set("csv_read_error", csv_validation_error)
                 self.page.session.set("temp_csv_file", None)
+                self.page.session.set("temp_csv_filename", None)
                 self.update_csv_display()
                 return
             
@@ -1311,9 +1325,13 @@ class CSVSelectorView(FileSelectorView):
             temp_csv_path = self.copy_csv_to_temp(file_path)
             if temp_csv_path:
                 self.page.session.set("temp_csv_file", temp_csv_path)
+                # Store just the basename for easy access
+                temp_csv_basename = os.path.basename(temp_csv_path)
+                self.page.session.set("temp_csv_filename", temp_csv_basename)
                 self.logger.info(f"Created working copy at: {temp_csv_path}")
             else:
                 self.page.session.set("temp_csv_file", None)
+                self.page.session.set("temp_csv_filename", None)
                 self.logger.warning("No working copy created - temp directory not available")
             
             # Read columns
@@ -1345,6 +1363,7 @@ class CSVSelectorView(FileSelectorView):
         """Clear CSV selection."""
         self.page.session.set("selected_csv_file", None)
         self.page.session.set("temp_csv_file", None)
+        self.page.session.set("temp_csv_filename", None)
         self.page.session.set("csv_columns", None)
         self.page.session.set("selected_csv_column", None)
         self.page.session.set("csv_read_error", None)
@@ -1533,6 +1552,7 @@ class CSVSelectorView(FileSelectorView):
             matched_paths = []
             matched_ratios = []
             unmatched_filenames = []
+            csv_filenames_for_matched = []  # Track CSV filenames for successfully matched files
             matches_found = 0
             original_count = len(selected_files)
             
@@ -1541,6 +1561,7 @@ class CSVSelectorView(FileSelectorView):
                 if match_path and ratio >= 90:
                     matched_paths.append(match_path)
                     matched_ratios.append(ratio)
+                    csv_filenames_for_matched.append(filename)  # Store original CSV filename
                     matches_found += 1
                     self.logger.info(f"Auto-workflow: Found match for '{filename}': {match_path} ({ratio}% match)")
                 else:
@@ -1563,8 +1584,9 @@ class CSVSelectorView(FileSelectorView):
             self.page.session.set("unmatched_filenames", unmatched_filenames)
             self.page.session.set("search_completed", True)
             
-            # Update session with matched paths
+            # Update session with matched paths and CSV filenames
             self.page.session.set("selected_file_paths", [p for p in matched_paths if p is not None])
+            self.page.session.set("csv_filenames_for_matched", csv_filenames_for_matched)
             
             self.logger.info(f"Auto-workflow: Fuzzy search completed. Found {matches_found} matches out of {len(selected_files)} files")
             return results

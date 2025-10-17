@@ -9,12 +9,101 @@ import flet as ft
 from views.base_view import BaseView
 import utils
 import logging
+import json
+import os
 
 
 class AboutView(BaseView):
     """
     About view class for displaying application information and demo logging.
     """
+    
+    PERSISTENT_SESSION_FILE = "storage/data/persistent_session.json"
+    
+    def preserve_session(self, e):
+        """
+        Save all session data to a persistent JSON file and protect temp directory.
+        """
+        try:
+            # Ensure storage/data directory exists
+            os.makedirs(os.path.dirname(self.PERSISTENT_SESSION_FILE), exist_ok=True)
+            
+            # Collect all session data
+            session_data = {}
+            for key in self.page.session.get_keys():
+                value = self.page.session.get(key)
+                # Convert to JSON-serializable format
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    session_data[key] = value
+                elif isinstance(value, (list, dict)):
+                    session_data[key] = value
+                else:
+                    # For other types, convert to string representation
+                    session_data[key] = str(value)
+            
+            # Add a flag to mark temp directory as protected
+            temp_directory = self.page.session.get("temp_directory")
+            if temp_directory:
+                session_data["_temp_protected"] = True
+            
+            # Save to JSON file
+            with open(self.PERSISTENT_SESSION_FILE, 'w', encoding='utf-8') as f:
+                json.dump(session_data, f, indent=2)
+            
+            self.logger.info(f"Preserved {len(session_data)} session keys to {self.PERSISTENT_SESSION_FILE}")
+            if temp_directory:
+                self.logger.info(f"Protected temporary directory: {temp_directory}")
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Session preserved! {len(session_data)} keys saved."),
+                bgcolor=ft.Colors.GREEN_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+        except Exception as e:
+            self.logger.error(f"Error preserving session: {e}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error: {str(e)}"),
+                bgcolor=ft.Colors.RED_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
+    @staticmethod
+    def restore_session(page):
+        """
+        Restore session data from persistent JSON file if it exists.
+        Should be called during app initialization.
+        
+        Args:
+            page: The Flet page object
+        """
+        try:
+            persistent_file = "storage/data/persistent_session.json"
+            if os.path.exists(persistent_file):
+                with open(persistent_file, 'r', encoding='utf-8') as f:
+                    session_data = json.load(f)
+                
+                # Restore all session keys
+                for key, value in session_data.items():
+                    if key != "_temp_protected":  # Don't restore the protection flag itself
+                        page.session.set(key, value)
+                
+                # Log restoration
+                logger = logging.getLogger(__name__)
+                logger.info(f"Restored {len(session_data)} session keys from {persistent_file}")
+                
+                temp_dir = session_data.get("temp_directory")
+                if temp_dir and session_data.get("_temp_protected"):
+                    logger.info(f"Restored protected temporary directory: {temp_dir}")
+                
+                return True
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error restoring session: {e}")
+        
+        return False
     
     def render(self) -> ft.Column:
         """
@@ -107,6 +196,21 @@ class AboutView(BaseView):
                     ft.ElevatedButton("Log WARNING", on_click=_log_warn),
                     ft.ElevatedButton("Log ERROR", on_click=_log_error),
                 ], alignment=ft.MainAxisAlignment.CENTER),
+                ft.Container(height=10),
+                ft.Divider(height=15, color=colors['divider']),
+                ft.Text("Session Preservation", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                ft.Text(
+                    "Save current session state and protect temporary directory for future sessions",
+                    size=12, italic=True, color=colors['secondary_text'], text_align=ft.TextAlign.CENTER
+                ),
+                ft.Container(height=5),
+                ft.ElevatedButton(
+                    "Preserve Session & Protect Temp Directory",
+                    icon=ft.Icons.SAVE_OUTLINED,
+                    on_click=self.preserve_session,
+                    bgcolor=ft.Colors.BLUE_700,
+                    color=ft.Colors.WHITE
+                ),
                 ft.Container(height=20),
             ],
         )
