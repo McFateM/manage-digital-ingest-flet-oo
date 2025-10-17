@@ -1,5 +1,10 @@
 # Manage Digital Ingest: a Flet Multi-Page
 
+## 📖 Documentation
+
+**[→ User Guide (USER.md)](USER.md)** - Complete instructions for using the application  
+**[→ Development History (HISTORY.md)](HISTORY.md)** - Chronological record of feature development and enhancements
+
 ## Setup Command Sequence
 
 ```zsh
