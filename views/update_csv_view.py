@@ -229,11 +229,8 @@ class UpdateCSVView(BaseView):
             new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
             new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
             
-            # Use the original CSV basename for dc:title
-            original_csv_basename = os.path.basename(original_csv_path)
-            new_row['dc:title'] = original_csv_basename
-            
-            # For file_name_1, use the temp CSV filename
+            # Use the sanitized temp CSV filename for both dc:title and file_name_1
+            new_row['dc:title'] = temp_csv_filename
             new_row['file_name_1'] = temp_csv_filename
             
             # Append the new row to the DataFrame
@@ -403,11 +400,8 @@ class UpdateCSVView(BaseView):
             new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
             new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
             
-            # Use the original CSV basename for dc:title (without path or timestamp)
-            original_csv_basename = os.path.basename(original_csv_path)
-            new_row['dc:title'] = original_csv_basename
-            
-            # For file_name_1, use the temp CSV filename (the one copied to temp dir with timestamp)
+            # Use the sanitized temp CSV filename for both dc:title and file_name_1
+            new_row['dc:title'] = temp_csv_filename
             new_row['file_name_1'] = temp_csv_filename
             
             # Append the new row to the DataFrame

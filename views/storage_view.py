@@ -37,8 +37,11 @@ class StorageView(BaseView):
                 self.show_snack("No temporary directory found. Please select files first.", is_error=True)
                 return
             
+            # Get the temp CSV filename from session
+            temp_csv_filename = self.page.session.get("temp_csv_filename")
+            
             # Generate the script
-            script_content = utils.generate_alma_s3_script(temp_dir)
+            script_content = utils.generate_alma_s3_script(temp_dir, temp_csv_filename)
             
             # Save script to temp directory
             script_path = os.path.join(temp_dir, "upload_to_alma.sh")
