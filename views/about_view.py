@@ -70,6 +70,43 @@ class AboutView(BaseView):
             self.page.snack_bar.open = True
             self.page.update()
     
+    def clear_session(self, e):
+        """
+        Clear all session data and delete the persistent session file.
+        Resets the application to pristine initial state.
+        """
+        try:
+            # Get all session keys before clearing
+            session_keys = list(self.page.session.get_keys())
+            key_count = len(session_keys)
+            
+            # Clear all session variables
+            for key in session_keys:
+                self.page.session.remove(key)
+            
+            # Delete the persistent session file if it exists
+            if os.path.exists(self.PERSISTENT_SESSION_FILE):
+                os.remove(self.PERSISTENT_SESSION_FILE)
+                self.logger.info(f"Deleted persistent session file: {self.PERSISTENT_SESSION_FILE}")
+            
+            self.logger.info(f"Cleared {key_count} session keys - session reset to pristine state")
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Session cleared! {key_count} keys removed. Application reset to initial state."),
+                bgcolor=ft.Colors.ORANGE_700
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+        except Exception as e:
+            self.logger.error(f"Error clearing session: {e}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error: {str(e)}"),
+                bgcolor=ft.Colors.RED_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
     @staticmethod
     def restore_session(page):
         """
@@ -198,19 +235,28 @@ class AboutView(BaseView):
                 ], alignment=ft.MainAxisAlignment.CENTER),
                 ft.Container(height=10),
                 ft.Divider(height=15, color=colors['divider']),
-                ft.Text("Session Preservation", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                ft.Text("Session Management", size=18, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
                 ft.Text(
-                    "Save current session state and protect temporary directory for future sessions",
+                    "Save current session state and protect temporary directory, or reset to pristine settings",
                     size=12, italic=True, color=colors['secondary_text'], text_align=ft.TextAlign.CENTER
                 ),
                 ft.Container(height=5),
-                ft.ElevatedButton(
-                    "Preserve Session & Protect Temp Directory",
-                    icon=ft.Icons.SAVE_OUTLINED,
-                    on_click=self.preserve_session,
-                    bgcolor=ft.Colors.BLUE_700,
-                    color=ft.Colors.WHITE
-                ),
+                ft.Row([
+                    ft.ElevatedButton(
+                        "Preserve Session & Protect Temp",
+                        icon=ft.Icons.SAVE_OUTLINED,
+                        on_click=self.preserve_session,
+                        bgcolor=ft.Colors.BLUE_700,
+                        color=ft.Colors.WHITE
+                    ),
+                    ft.ElevatedButton(
+                        "Clear Session & Reset",
+                        icon=ft.Icons.RESTART_ALT,
+                        on_click=self.clear_session,
+                        bgcolor=ft.Colors.ORANGE_700,
+                        color=ft.Colors.WHITE
+                    ),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
                 ft.Container(height=20),
             ],
         )

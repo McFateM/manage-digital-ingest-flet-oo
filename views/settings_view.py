@@ -55,6 +55,50 @@ class SettingsView(BaseView):
         except Exception as e:
             self.logger.error(f"Failed to save persistent settings: {e}")
     
+    def clear_session(self, e):
+        """
+        Clear all session data and delete the persistent session file.
+        Resets the application to pristine initial state.
+        """
+        try:
+            # Import here to avoid circular dependency
+            from views.about_view import AboutView
+            
+            # Get all session keys before clearing
+            session_keys = list(self.page.session.get_keys())
+            key_count = len(session_keys)
+            
+            # Clear all session variables
+            for key in session_keys:
+                self.page.session.remove(key)
+            
+            # Delete the persistent session file if it exists
+            persistent_session_file = AboutView.PERSISTENT_SESSION_FILE
+            if os.path.exists(persistent_session_file):
+                os.remove(persistent_session_file)
+                self.logger.info(f"Deleted persistent session file: {persistent_session_file}")
+            
+            self.logger.info(f"Cleared {key_count} session keys - session reset to pristine state")
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Session cleared! {key_count} keys removed. Application reset to initial state."),
+                bgcolor=ft.Colors.ORANGE_700
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            # Refresh the settings view to show cleared state
+            self.page.go("/settings")
+            
+        except Exception as e:
+            self.logger.error(f"Error clearing session: {e}")
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error: {str(e)}"),
+                bgcolor=ft.Colors.RED_600
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
     def render(self) -> ft.Column:
         """
         Render the settings view content.
@@ -288,7 +332,26 @@ class SettingsView(BaseView):
             storage_settings_container,
             collection_settings_container,
             ft.Divider(height=15, color=colors['divider']),
-            theme_settings_container
+            theme_settings_container,
+            ft.Divider(height=15, color=colors['divider']),
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Session Management", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                    ft.Text(
+                        "Clear all session data and reset to pristine initial settings",
+                        size=12, italic=True, color=colors['secondary_text']
+                    ),
+                    ft.Container(height=5),
+                    ft.ElevatedButton(
+                        "Clear Session & Reset to Defaults",
+                        icon=ft.Icons.RESTART_ALT,
+                        on_click=self.clear_session,
+                        bgcolor=ft.Colors.ORANGE_700,
+                        color=ft.Colors.WHITE
+                    ),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.all(10),
+            )
         ], alignment="start", spacing=0)
     
     def log_all_current_selections(self):

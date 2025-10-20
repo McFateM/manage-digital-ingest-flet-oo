@@ -919,26 +919,46 @@ class CSVSelectorView(FileSelectorView):
                     ])
 
             elif current_csv_columns and len(current_csv_columns) > 0:
+                # Check if we're in Alma mode with auto-selected column
+                current_mode = self.page.session.get("selected_mode")
+                is_alma_auto_selected = (current_mode == "Alma" and current_selected_column == "file_name_1")
                 
-                columns_content.controls.extend([
-                    # ft.Container(height=10),
-                    ft.Container(
-                        content=ft.Row([
-                            ft.Container(width=10),  # 10 space indentation
-                            ft.Column([
-                                ft.Text("Select column containing filenames:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                                ft.Dropdown(
-                                    label="Choose filename column",
-                                    value=current_selected_column if current_selected_column else "",
-                                    options=[ft.dropdown.Option(col) for col in current_csv_columns],
-                                    on_change=self.on_column_selection_change,
-                                    width=300
-                                )
-                            ], spacing=5, alignment=ft.CrossAxisAlignment.START)
-                        ], alignment=ft.MainAxisAlignment.START),
-                        margin=ft.margin.only(bottom=10)  # Small margin below control
-                    )
-                ])
+                if is_alma_auto_selected:
+                    # In Alma mode, show a read-only message instead of dropdown
+                    columns_content.controls.extend([
+                        # ft.Container(height=10),
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Container(width=10),  # 10 space indentation
+                                ft.Column([
+                                    ft.Text("Alma mode: Using 'file_name_1' column", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                                    ft.Text("In Alma mode, the file_name_1 column is automatically selected", size=12, color=colors['secondary_text'])
+                                ], spacing=5, alignment=ft.CrossAxisAlignment.START)
+                            ], alignment=ft.MainAxisAlignment.START),
+                            margin=ft.margin.only(bottom=10)  # Small margin below control
+                        )
+                    ])
+                else:
+                    # Non-Alma mode or no auto-selection: show dropdown
+                    columns_content.controls.extend([
+                        # ft.Container(height=10),
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Container(width=10),  # 10 space indentation
+                                ft.Column([
+                                    ft.Text("Select column containing filenames:", size=14, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                                    ft.Dropdown(
+                                        label="Choose filename column",
+                                        value=current_selected_column if current_selected_column else "",
+                                        options=[ft.dropdown.Option(col) for col in current_csv_columns],
+                                        on_change=self.on_column_selection_change,
+                                        width=300
+                                    )
+                                ], spacing=5, alignment=ft.CrossAxisAlignment.START)
+                            ], alignment=ft.MainAxisAlignment.START),
+                            margin=ft.margin.only(bottom=10)  # Small margin below control
+                        )
+                    ])
                 
                 # Show processing results if a column is selected
                 if current_selected_column:
@@ -1341,15 +1361,39 @@ class CSVSelectorView(FileSelectorView):
                 self.page.session.set("csv_columns", columns)
                 self.page.session.set("csv_read_error", None)
                 self.logger.info(f"Successfully read {len(columns)} columns")
+                
+                # In Alma mode, automatically select 'file_name_1' column if it exists
+                current_mode = self.page.session.get("selected_mode")
+                if current_mode == "Alma" and "file_name_1" in columns:
+                    self.page.session.set("selected_csv_column", "file_name_1")
+                    self.logger.info("Alma mode: Automatically selected 'file_name_1' column")
+                    
+                    # Extract data from the column
+                    column_data = self.extract_column_data(file_path, "file_name_1")
+                    self.page.session.set("selected_file_paths", column_data)
+                    # Set the original count when we first extract the filenames
+                    original_count = len(column_data)
+                    self.page.session.set("original_filename_count", original_count)
+                    self.logger.info(f"Extracted {len(column_data)} potential filenames from file_name_1")
+                else:
+                    # Clear previous selection for non-Alma or if file_name_1 not found
+                    self.page.session.set("selected_csv_column", None)
             else:
                 self.page.session.set("csv_columns", None)
                 self.page.session.set("csv_read_error", error)
                 self.logger.error(f"Failed to read CSV: {error}")
+                
+                # Clear previous selections
+                self.page.session.set("selected_csv_column", None)
             
-            # Clear previous selections
-            self.page.session.set("selected_csv_column", None)
-            self.page.session.set("selected_file_paths", [])
-            self.page.session.set("original_filename_count", None)
+            # Clear search statistics (but not if we auto-selected a column in Alma mode)
+            current_mode = self.page.session.get("selected_mode")
+            auto_selected = (current_mode == "Alma" and columns and "file_name_1" in columns)
+            
+            if not auto_selected:
+                self.page.session.set("selected_file_paths", [])
+                self.page.session.set("original_filename_count", None)
+            
             self.page.session.set("matched_file_count", None)
             self.page.session.set("matched_ratios", None)
             self.page.session.set("unmatched_filenames", None)
@@ -1391,6 +1435,20 @@ class CSVSelectorView(FileSelectorView):
             if columns:
                 self.page.session.set("csv_columns", columns)
                 self.page.session.set("csv_read_error", None)
+                
+                # In Alma mode, automatically select 'file_name_1' column if it exists
+                current_mode = self.page.session.get("selected_mode")
+                if current_mode == "Alma" and "file_name_1" in columns:
+                    self.page.session.set("selected_csv_column", "file_name_1")
+                    self.logger.info("Alma mode: Automatically selected 'file_name_1' column on reload")
+                    
+                    # Extract data from the column
+                    column_data = self.extract_column_data(current_csv_file, "file_name_1")
+                    self.page.session.set("selected_file_paths", column_data)
+                    # Set the original count when we first extract the filenames
+                    original_count = len(column_data)
+                    self.page.session.set("original_filename_count", original_count)
+                    self.logger.info(f"Extracted {len(column_data)} potential filenames from file_name_1")
             else:
                 self.page.session.set("csv_columns", None)
                 self.page.session.set("csv_read_error", error)

@@ -156,6 +156,7 @@ class UpdateCSVView(BaseView):
             csv_filenames_for_matched = self.page.session.get("csv_filenames_for_matched") or []
             temp_csv_filename = self.page.session.get("temp_csv_filename") or ""
             original_csv_path = self.page.session.get("selected_csv_file") or ""
+            current_mode = self.page.session.get("selected_mode") or "Alma"
             
             if self.csv_data is None:
                 self.logger.warning("CSV data not loaded")
@@ -218,10 +219,15 @@ class UpdateCSVView(BaseView):
             # Create new row with all empty values first
             new_row = {col: '' for col in self.csv_data.columns}
             
+            # Extract numeric portion for Handle URL (e.g., "dg_1234567890" -> "1234567890")
+            numeric_part = unique_id.split('_')[-1] if '_' in unique_id else unique_id
+            handle_url = f"http://hdl.handle.net/11084/{numeric_part}"
+            
             # Populate specific columns
             new_row['originating_system_id'] = unique_id
-            new_row['dc:identifier'] = unique_id
-            new_row['collection_id'] = '81342586470004641'
+            new_row['dc:identifier'] = handle_url  # Use Handle URL format in Alma mode
+            new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
+            new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
             
             # Use the original CSV basename for dc:title
             original_csv_basename = os.path.basename(original_csv_path)
@@ -253,13 +259,54 @@ class UpdateCSVView(BaseView):
                         if 'dc:identifier' in self.csv_data.columns:
                             dc_id_value = self.csv_data.at[idx, 'dc:identifier']
                             if pd.isna(dc_id_value) or str(dc_id_value).strip() == '':
-                                self.csv_data.at[idx, 'dc:identifier'] = new_id
+                                # In Alma mode, use Handle URL format
+                                if current_mode == "Alma":
+                                    numeric_part = new_id.split('_')[-1] if '_' in new_id else new_id
+                                    self.csv_data.at[idx, 'dc:identifier'] = f"http://hdl.handle.net/11084/{numeric_part}"
+                                else:
+                                    self.csv_data.at[idx, 'dc:identifier'] = new_id
                         filled_ids += 1
                         self.logger.info(f"Generated ID {new_id} for row {idx}")
                 if filled_ids > 0:
                     self.logger.info(f"Filled {filled_ids} empty originating_system_id cell(s)")
             else:
                 self.logger.warning("originating_system_id column not found in CSV")
+            
+            # Step 3.5: In Alma mode, convert dc:identifier to Handle URL format
+            if current_mode == "Alma" and 'dc:identifier' in self.csv_data.columns and 'originating_system_id' in self.csv_data.columns:
+                handle_count = 0
+                for idx in range(len(self.csv_data)):
+                    orig_id = self.csv_data.at[idx, 'originating_system_id']
+                    # Extract numeric portion from originating_system_id (e.g., "dg_1234567890" -> "1234567890")
+                    if not pd.isna(orig_id) and str(orig_id).strip() != '':
+                        orig_id_str = str(orig_id).strip()
+                        # Extract numeric part (everything after last underscore or the whole thing if no underscore)
+                        if '_' in orig_id_str:
+                            numeric_part = orig_id_str.split('_')[-1]
+                        else:
+                            numeric_part = orig_id_str
+                        
+                        # Only proceed if we have a numeric part
+                        if numeric_part.isdigit():
+                            handle_url = f"http://hdl.handle.net/11084/{numeric_part}"
+                            self.csv_data.at[idx, 'dc:identifier'] = handle_url
+                            handle_count += 1
+                
+                if handle_count > 0:
+                    self.logger.info(f"Set {handle_count} dc:identifier cell(s) to Handle URL format")
+            
+            # Step 3.6: Fill empty collection_id cells with Pending Review collection (Alma mode only)
+            filled_collections = 0
+            if current_mode == "Alma" and 'collection_id' in self.csv_data.columns:
+                pending_review_id = '81313013130004641'  # Pending Review collection
+                for idx in range(len(self.csv_data)):
+                    cell_value = self.csv_data.at[idx, 'collection_id']
+                    # Check if empty (empty string, None, or NaN)
+                    if pd.isna(cell_value) or str(cell_value).strip() == '':
+                        self.csv_data.at[idx, 'collection_id'] = pending_review_id
+                        filled_collections += 1
+                if filled_collections > 0:
+                    self.logger.info(f"Filled {filled_collections} empty collection_id cell(s) with Pending Review collection")
             
             # Step 4: Populate dginfo field for ALL rows with temp CSV filename
             if 'dginfo' in self.csv_data.columns:
@@ -274,6 +321,17 @@ class UpdateCSVView(BaseView):
             self.save_csv_data()
             self.edits_applied = True
             
+            # Step 5: In Alma mode, create a copy named values.csv in temp directory
+            if current_mode == "Alma":
+                temp_dir = self.page.session.get("temp_directory")
+                if temp_dir and self.temp_csv_path:
+                    try:
+                        values_csv_path = os.path.join(temp_dir, "values.csv")
+                        shutil.copy2(self.temp_csv_path, values_csv_path)
+                        self.logger.info(f"Created values.csv copy in temp directory: {values_csv_path}")
+                    except Exception as e:
+                        self.logger.error(f"Error creating values.csv copy: {e}")
+            
             # Update the data table display
             if self.data_table:
                 new_table = self.render_data_table()
@@ -287,6 +345,8 @@ class UpdateCSVView(BaseView):
             message_parts.append(f"Added CSV row (ID: {unique_id})")
             if filled_ids > 0:
                 message_parts.append(f"Generated {filled_ids} ID(s)")
+            if filled_collections > 0:
+                message_parts.append(f"Set {filled_collections} collection(s) to Pending Review")
             message_parts.append(f"Set dginfo for all rows")
             
             self.logger.info("Apply All Updates completed successfully")
@@ -333,10 +393,15 @@ class UpdateCSVView(BaseView):
             # Create new row with all empty values first
             new_row = {col: '' for col in self.csv_data.columns}
             
+            # Extract numeric portion for Handle URL (e.g., "dg_1234567890" -> "1234567890")
+            numeric_part = unique_id.split('_')[-1] if '_' in unique_id else unique_id
+            handle_url = f"http://hdl.handle.net/11084/{numeric_part}"
+            
             # Populate specific columns
             new_row['originating_system_id'] = unique_id
-            new_row['dc:identifier'] = unique_id
-            new_row['collection_id'] = '81342586470004641'
+            new_row['dc:identifier'] = handle_url  # Use Handle URL format in Alma mode
+            new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
+            new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
             
             # Use the original CSV basename for dc:title (without path or timestamp)
             original_csv_basename = os.path.basename(original_csv_path)
