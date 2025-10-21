@@ -82,11 +82,14 @@ class InstructionsView(BaseView):
                 # Add comment text if available
                 controls_list = []
                 if comment:
+                    # Determine comment color: red for last command (optional cleanup), green for others
+                    comment_color = ft.Colors.RED_300 if idx == len(commands) else ft.Colors.GREEN_300
+                    
                     controls_list.append(
                         ft.Text(
                             comment,
                             size=12,
-                            color=ft.Colors.BLUE_300,
+                            color=comment_color,
                             weight=ft.FontWeight.W_500,
                             italic=True
                         )
