@@ -59,42 +59,67 @@ class InstructionsView(BaseView):
                 self.show_snack(f"Failed to save script: {ex}", is_error=True)
                 return
             
-            # Parse script into commands (lines starting with 'aws')
+            # Parse script into commands (lines starting with 'aws') and their preceding comments
             lines = script_content.split('\n')
             commands = []
-            for line in lines:
+            for i, line in enumerate(lines):
                 stripped = line.strip()
                 if stripped.startswith('aws '):
-                    commands.append(stripped)
+                    # Look for the preceding comment line (starts with #)
+                    comment = ""
+                    if i > 0:
+                        prev_line = lines[i - 1].strip()
+                        if prev_line.startswith('#') and not prev_line.startswith('#!/'):
+                            # Remove the leading # and whitespace
+                            comment = prev_line.lstrip('#').strip()
+                    commands.append((comment, stripped))
             
             # Create display with copy buttons
             colors = self.get_theme_colors()
             
             command_controls = []
-            for idx, cmd in enumerate(commands, 1):
+            for idx, (comment, cmd) in enumerate(commands, 1):
+                # Add comment text if available
+                controls_list = []
+                if comment:
+                    controls_list.append(
+                        ft.Text(
+                            comment,
+                            size=12,
+                            color=ft.Colors.BLUE_300,
+                            weight=ft.FontWeight.W_500,
+                            italic=True
+                        )
+                    )
+                
+                # Add the command with copy button
+                controls_list.append(
+                    ft.Row([
+                        ft.Container(
+                            content=ft.Text(
+                                cmd,
+                                size=11,
+                                font_family="Courier New",
+                                color=ft.Colors.GREEN_300,  # Lighter text for better contrast
+                                selectable=True
+                            ),
+                            expand=True,
+                            padding=10,
+                            bgcolor=ft.Colors.GREY_900,  # Darker background for better contrast
+                            border_radius=4,
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.COPY,
+                            tooltip=f"Copy command {idx}",
+                            on_click=lambda e, command=cmd: self.copy_to_clipboard(e, command)
+                        )
+                    ], spacing=5)
+                )
+                
                 command_controls.append(
                     ft.Container(
-                        content=ft.Row([
-                            ft.Container(
-                                content=ft.Text(
-                                    cmd,
-                                    size=11,
-                                    font_family="Courier New",
-                                    color=ft.Colors.GREEN_300,  # Lighter text for better contrast
-                                    selectable=True
-                                ),
-                                expand=True,
-                                padding=10,
-                                bgcolor=ft.Colors.GREY_900,  # Darker background for better contrast
-                                border_radius=4,
-                            ),
-                            ft.IconButton(
-                                icon=ft.Icons.COPY,
-                                tooltip=f"Copy command {idx}",
-                                on_click=lambda e, command=cmd: self.copy_to_clipboard(e, command)
-                            )
-                        ], spacing=5),
-                        margin=ft.margin.only(bottom=10)
+                        content=ft.Column(controls_list, spacing=5),
+                        margin=ft.margin.only(bottom=15)
                     )
                 )
             
@@ -125,8 +150,8 @@ class InstructionsView(BaseView):
                         ft.Container(height=10),
                         ft.Column(
                             command_controls,
-                            scroll=ft.ScrollMode.AUTO,
-                            height=300
+                            scroll=ft.ScrollMode.ALWAYS,
+                            height=450
                         ),
                     ], spacing=5),
                     width=700,
@@ -166,6 +191,7 @@ class InstructionsView(BaseView):
         
         # Create input fields for profile-id and import-id
         self.profile_id_input = ft.TextField(
+            value="6496776180004641",
             hint_text="e.g., 12345",
             width=200,
             dense=True,

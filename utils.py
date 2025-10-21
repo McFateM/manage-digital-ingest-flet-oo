@@ -418,7 +418,7 @@ def generate_alma_s3_script(temp_directory, temp_csv_filename=None):
         str: The bash script content with temp_directory replaced
     """
     # Default Profile ID for Alma uploads
-    default_profile_id = "7256667200004641"
+    default_profile_id = "6496776180004641"
     
     # Determine the CSV file reference for the script
     if temp_csv_filename:
@@ -436,6 +436,7 @@ def generate_alma_s3_script(temp_directory, temp_csv_filename=None):
 
 # Step 1: Print the name and contents of the upload bucket
 echo "Step 1: Listing contents of Alma S3 upload bucket..."
+# List all files in the upload bucket to find your <import-id>
 aws s3 ls s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/ --recursive
 
 echo ""
@@ -449,25 +450,34 @@ read -p "Press Enter when ready to continue with the copy commands..."
 # Note: values.csv is handled automatically by Alma and should not be uploaded
 echo ""
 echo "Step 2a: Copying temporary CSV file to Alma S3 storage..."
+# Upload the metadata CSV file containing digital object information
 aws s3 cp {csv_file_path} s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/<import-id>/
 
 # Step 2b: Copy OBJS directory to S3
 echo ""
 echo "Step 2b: Copying OBJS directory to Alma S3 storage..."
+# Upload all master/original digital object files from the OBJS directory
 aws s3 cp {temp_directory}/OBJS/ s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/<import-id>/ --recursive
 
 # Step 2c: Copy TN directory to S3
 echo ""
 echo "Step 2c: Copying TN directory to Alma S3 storage..."
+# Upload all thumbnail images from the TN directory
 aws s3 cp {temp_directory}/TN/ s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/<import-id>/ --recursive
 
 # Step 3: Verify the upload
 echo ""
 echo "Step 3: Verifying upload..."
+# List all uploaded files to confirm successful transfer
 aws s3 ls s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/ --recursive
 
 echo ""
 echo "Once verified, return to Alma to complete the import operation"
+echo ""
+echo "Optional: After Alma import is complete, you can clean up the S3 bucket:"
+echo ""
+# Remove all files from the upload bucket after successful import (optional cleanup)
+aws s3 rm s3://na-st01.ext.exlibrisgroup.com/01GCL_INST/upload/{profile_id}/ --recursive
 """
     
     # Replace the placeholders
