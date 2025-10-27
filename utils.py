@@ -133,11 +133,9 @@ def perform_fuzzy_search(base_path, target_filename, threshold=90):
                     if ratio == 100:
                         return (best_match_path, ratio)
         
-        # Return the match path only if it meets the threshold, but always return the best ratio found
-        if best_match_ratio >= threshold:
-            return (best_match_path, best_match_ratio)
-        else:
-            return (None, best_match_ratio)
+        # Always return the best match path and ratio found, regardless of threshold
+        # The caller will decide whether to accept it based on the threshold
+        return (best_match_path, best_match_ratio)
             
     except Exception as e:
         logging.error(f"Error in fuzzy search: {str(e)}")

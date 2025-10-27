@@ -1087,14 +1087,21 @@ class CSVSelectorView(FileSelectorView):
                     def copy_matched_to_clipboard(e):
                         selected = self.page.session.get("selected_file_paths") or []
                         ratios = self.page.session.get("matched_ratios") or []
+                        csv_filenames = self.page.session.get("csv_filenames_for_matched") or []
+                        
                         if selected:
                             # Create list with filenames and match percentages
                             clipboard_lines = []
                             for i, filepath in enumerate(selected):
                                 if filepath:
-                                    filename = os.path.basename(filepath)
+                                    target_filename = csv_filenames[i] if i < len(csv_filenames) else os.path.basename(filepath)
                                     ratio = ratios[i] if i < len(ratios) else 100
-                                    clipboard_lines.append(f"{filename} ({ratio}%)")
+                                    
+                                    if ratio < 100:
+                                        # Include matched file path for imperfect matches
+                                        clipboard_lines.append(f"{target_filename} ({ratio}%) -> {filepath}")
+                                    else:
+                                        clipboard_lines.append(f"{target_filename} ({ratio}%)")
                             
                             clipboard_text = "\n".join(clipboard_lines)
                             self.page.set_clipboard(clipboard_text)
@@ -1116,15 +1123,32 @@ class CSVSelectorView(FileSelectorView):
                     )
                     
                     matched_items = []
+                    # Get the CSV filenames (target names) for matched files
+                    csv_filenames = self.page.session.get("csv_filenames_for_matched") or []
+                    selected_paths = self.page.session.get("selected_file_paths") or []
+                    
                     # Since selected_files only contains matched paths, and matched_ratios align with them
                     for i, filepath in enumerate(selected_files):
                         if filepath:  # Should all be absolute paths
                             ratio = matched_ratios[i] if i < len(matched_ratios) else 100
-                            display_text = f"{os.path.basename(filepath)} ({ratio}%)"
+                            target_filename = csv_filenames[i] if i < len(csv_filenames) else os.path.basename(filepath)
+                            
+                            # Main display line
+                            display_text = f"{target_filename} ({ratio}%)"
                             text_color = colors['secondary_text'] if ratio == 100 else ft.Colors.ORANGE_600
-                            matched_items.append(
-                                ft.Text(display_text, size=11, color=text_color)
-                            )
+                            main_text = ft.Text(display_text, size=11, color=text_color)
+                            matched_items.append(main_text)
+                            
+                            # If ratio < 100%, show the matched file path
+                            if ratio < 100:
+                                matched_path = selected_paths[i] if i < len(selected_paths) else filepath
+                                matched_file_text = ft.Text(
+                                    f"  └─ Matched to: {matched_path}",
+                                    size=10,
+                                    color=ft.Colors.BLUE_300,
+                                    italic=True
+                                )
+                                matched_items.append(matched_file_text)
                     
                     self.logger.info(f"Display: Created {len(matched_items)} matched items")
                     
@@ -1158,7 +1182,22 @@ class CSVSelectorView(FileSelectorView):
                     def copy_unmatched_to_clipboard(e):
                         unmatched = self.page.session.get("unmatched_filenames") or []
                         if unmatched:
-                            clipboard_text = "\n".join(unmatched)
+                            # Handle both old format (strings) and new format (dicts)
+                            clipboard_lines = []
+                            for item in unmatched:
+                                if isinstance(item, dict):
+                                    filename = item.get('filename', '')
+                                    best_path = item.get('best_path', '')
+                                    best_ratio = item.get('best_ratio', 0)
+                                    if best_path and best_ratio > 0:
+                                        clipboard_lines.append(f"{filename} (best match: {best_path}, {best_ratio}%)")
+                                    else:
+                                        clipboard_lines.append(filename)
+                                else:
+                                    # Old format - just a string
+                                    clipboard_lines.append(item)
+                            
+                            clipboard_text = "\n".join(clipboard_lines)
                             self.page.set_clipboard(clipboard_text)
                             self.logger.info(f"Copied {len(unmatched)} unmatched filenames to clipboard")
                             self.show_snack(f"Copied {len(unmatched)} unmatched filenames to clipboard")
@@ -1182,10 +1221,32 @@ class CSVSelectorView(FileSelectorView):
                         ], spacing=5, alignment=ft.MainAxisAlignment.START)
                     )
                     
-                    unmatched_items = [
-                        ft.Text(filename, size=11, color=ft.Colors.RED_400)
-                        for filename in unmatched_filenames[:20]  # Limit to first 20
-                    ]
+                    # Create unmatched items with best match info
+                    unmatched_items = []
+                    for item in unmatched_filenames[:20]:  # Limit to first 20
+                        if isinstance(item, dict):
+                            filename = item.get('filename', '')
+                            best_path = item.get('best_path', '')
+                            best_ratio = item.get('best_ratio', 0)
+                            
+                            # Create main text with filename
+                            main_text = ft.Text(filename, size=11, color=ft.Colors.RED_400)
+                            
+                            # Add best match info if available (path exists and ratio > 0)
+                            if best_path and best_ratio > 0:
+                                best_match_text = ft.Text(
+                                    f"  └─ Best match ({best_ratio}%): {best_path}",
+                                    size=10,
+                                    color=ft.Colors.ORANGE_300,
+                                    italic=True
+                                )
+                                unmatched_items.extend([main_text, best_match_text])
+                            else:
+                                unmatched_items.append(main_text)
+                        else:
+                            # Old format - just a string
+                            unmatched_items.append(ft.Text(item, size=11, color=ft.Colors.RED_400))
+                    
                     
                     if len(unmatched_filenames) > 20:
                         unmatched_items.append(
@@ -1624,7 +1685,12 @@ class CSVSelectorView(FileSelectorView):
                     self.logger.info(f"Auto-workflow: Found match for '{filename}': {match_path} ({ratio}% match)")
                 else:
                     matched_paths.append(None)
-                    unmatched_filenames.append(filename)
+                    # Store unmatched filename with best match info (filename, best_path, best_ratio)
+                    unmatched_filenames.append({
+                        'filename': filename,
+                        'best_path': match_path,
+                        'best_ratio': ratio
+                    })
                     # Log unmatched files with severity based on fuzzy score
                     if ratio == 0:
                         self.logger.error(f"Auto-workflow: No match found for '{filename}' (0% match)")
@@ -1830,7 +1896,12 @@ class CSVSelectorView(FileSelectorView):
                     self.logger.info(f"Found match for '{filename}': {match_path} ({ratio}% match)")
                 else:
                     matched_paths.append(None)
-                    unmatched_filenames.append(filename)
+                    # Store unmatched filename with best match info (filename, best_path, best_ratio)
+                    unmatched_filenames.append({
+                        'filename': filename,
+                        'best_path': match_path,
+                        'best_ratio': ratio
+                    })
                     # Log unmatched files with severity based on fuzzy score
                     if ratio == 0:
                         self.logger.error(f"No match found for '{filename}' (0% match)")
