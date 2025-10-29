@@ -192,6 +192,14 @@ class UpdateCSVView(BaseView):
             
             # Step 1: Update existing rows with matched sanitized filenames
             updates = 0
+            
+            # Log initial state for debugging
+            self.logger.info(f"Starting Step 1: Current mode = {current_mode}")
+            self.logger.info(f"Column name to match: {column_name}")
+            self.logger.info(f"temp_file_info count: {len(temp_file_info) if temp_file_info else 0}")
+            self.logger.info(f"csv_filenames_for_matched count: {len(csv_filenames_for_matched) if csv_filenames_for_matched else 0}")
+            self.logger.info(f"CSV columns available: {list(self.csv_data.columns)}")
+            
             if temp_file_info and csv_filenames_for_matched:
                 for idx, file_info in enumerate(temp_file_info):
                     sanitized_filename = file_info.get('sanitized_filename', '')
@@ -203,71 +211,127 @@ class UpdateCSVView(BaseView):
                         # Fall back to original_filename for file picker workflow
                         csv_filename = file_info.get('original_filename', '')
                     
+                    self.logger.info(f"Processing file {idx}: csv_filename='{csv_filename}', sanitized='{sanitized_filename}'")
+                    
                     # Find the row with this CSV filename
                     mask = self.csv_data[column_name] == csv_filename
+                    self.logger.info(f"Mask matches: {mask.sum()} rows")
+                    
                     if mask.any():
                         row_idx = self.csv_data[mask].index[0]
-                        # Replace with sanitized filename
-                        self.csv_data.at[row_idx, column_name] = sanitized_filename
+                        self.logger.info(f"Found match at row index: {row_idx}")
+                        
+                        if current_mode == "CollectionBuilder":
+                            # In CollectionBuilder mode, populate Azure blob URLs
+                            azure_base_url = "https://collectionbuilder.blob.core.windows.net"
+                            selected_collection = self.page.session.get("selected_collection") or ""
+                            
+                            self.logger.info(f"CollectionBuilder mode - selected_collection: '{selected_collection}'")
+                            
+                            # Build derivative filenames for smalls and thumbs
+                            # Remove extension from sanitized_filename and add _SMALL.jpg and _TN.jpg
+                            base_name = os.path.splitext(sanitized_filename)[0]
+                            small_filename = f"{base_name}_SMALL.jpg"
+                            thumb_filename = f"{base_name}_TN.jpg"
+                            
+                            # Build blob URLs with collection prefix
+                            if selected_collection:
+                                obj_url = f"{azure_base_url}/objs/{selected_collection}/{sanitized_filename}"
+                                small_url = f"{azure_base_url}/smalls/{selected_collection}/{small_filename}"
+                                thumb_url = f"{azure_base_url}/thumbs/{selected_collection}/{thumb_filename}"
+                            else:
+                                obj_url = f"{azure_base_url}/objs/{sanitized_filename}"
+                                small_url = f"{azure_base_url}/smalls/{small_filename}"
+                                thumb_url = f"{azure_base_url}/thumbs/{thumb_filename}"
+                            
+                            self.logger.info(f"Generated URLs - obj: {obj_url}, small: {small_url}, thumb: {thumb_url}")
+                            
+                            # Update the three URL columns
+                            if 'object_location' in self.csv_data.columns:
+                                self.csv_data.at[row_idx, 'object_location'] = obj_url
+                                self.logger.info(f"Set object_location at row {row_idx}")
+                            else:
+                                self.logger.warning("object_location column not found in CSV!")
+                                
+                            if 'image_small' in self.csv_data.columns:
+                                self.csv_data.at[row_idx, 'image_small'] = small_url
+                                self.logger.info(f"Set image_small at row {row_idx}")
+                            else:
+                                self.logger.warning("image_small column not found in CSV!")
+                                
+                            if 'image_thumb' in self.csv_data.columns:
+                                self.csv_data.at[row_idx, 'image_thumb'] = thumb_url
+                                self.logger.info(f"Set image_thumb at row {row_idx}")
+                            else:
+                                self.logger.warning("image_thumb column not found in CSV!")
+                            
+                            self.logger.info(f"Updated CollectionBuilder URLs for: '{csv_filename}'")
+                        else:
+                            # In Alma mode, just replace with sanitized filename
+                            self.csv_data.at[row_idx, column_name] = sanitized_filename
+                            self.logger.info(f"Updated CSV: '{csv_filename}' -> '{sanitized_filename}'")
+                        
                         updates += 1
-                        self.logger.info(f"Updated CSV: '{csv_filename}' -> '{sanitized_filename}'")
+                    else:
+                        self.logger.warning(f"No match found for csv_filename: '{csv_filename}'")
+            else:
+                self.logger.warning(f"Missing data - temp_file_info: {temp_file_info is not None}, csv_filenames_for_matched: {csv_filenames_for_matched is not None}")
             
-            # Step 2: Append a new row for the CSV file itself
-            # Generate unique ID
-            unique_id = utils.generate_unique_id(self.page)
+            # Step 2: Append a new row for the CSV file itself (Alma mode only)
+            if current_mode == "Alma":
+                # Generate unique ID
+                unique_id = utils.generate_unique_id(self.page)
+                
+                # Create new row with all empty values first
+                new_row = {col: '' for col in self.csv_data.columns}
+                
+                # Extract numeric portion for Handle URL (e.g., "dg_1234567890" -> "1234567890")
+                numeric_part = unique_id.split('_')[-1] if '_' in unique_id else unique_id
+                handle_url = f"http://hdl.handle.net/11084/{numeric_part}"
+                
+                # Populate specific columns
+                new_row['originating_system_id'] = unique_id
+                new_row['dc:identifier'] = handle_url  # Use Handle URL format in Alma mode
+                new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
+                new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
+                
+                # Use the sanitized temp CSV filename for both dc:title and file_name_1
+                new_row['dc:title'] = temp_csv_filename
+                new_row['file_name_1'] = temp_csv_filename
+                
+                # Append the new row to the DataFrame
+                import pandas as pd
+                new_row_df = pd.DataFrame([new_row])
+                self.csv_data = pd.concat([self.csv_data, new_row_df], ignore_index=True)
+                
+                # Also update the original to match (so comparison logic doesn't break)
+                self.csv_data_original = pd.concat([self.csv_data_original, new_row_df], ignore_index=True)
+                
+                self.logger.info(f"Appended new row with ID: {unique_id}")
             
-            # Create new row with all empty values first
-            new_row = {col: '' for col in self.csv_data.columns}
-            
-            # Extract numeric portion for Handle URL (e.g., "dg_1234567890" -> "1234567890")
-            numeric_part = unique_id.split('_')[-1] if '_' in unique_id else unique_id
-            handle_url = f"http://hdl.handle.net/11084/{numeric_part}"
-            
-            # Populate specific columns
-            new_row['originating_system_id'] = unique_id
-            new_row['dc:identifier'] = handle_url  # Use Handle URL format in Alma mode
-            new_row['collection_id'] = '81342586470004641'  # CSV file record gets different collection
-            new_row['dc:type'] = 'Dataset'  # CSV file is a dataset
-            
-            # Use the sanitized temp CSV filename for both dc:title and file_name_1
-            new_row['dc:title'] = temp_csv_filename
-            new_row['file_name_1'] = temp_csv_filename
-            
-            # Append the new row to the DataFrame
-            import pandas as pd
-            new_row_df = pd.DataFrame([new_row])
-            self.csv_data = pd.concat([self.csv_data, new_row_df], ignore_index=True)
-            
-            # Also update the original to match (so comparison logic doesn't break)
-            self.csv_data_original = pd.concat([self.csv_data_original, new_row_df], ignore_index=True)
-            
-            self.logger.info(f"Appended new row with ID: {unique_id}")
-            
-            # Step 3: Fill empty originating_system_id cells with unique IDs
-            filled_ids = 0
-            if 'originating_system_id' in self.csv_data.columns:
-                for idx in range(len(self.csv_data)):
-                    cell_value = self.csv_data.at[idx, 'originating_system_id']
-                    # Check if empty (empty string, None, or NaN)
-                    if pd.isna(cell_value) or str(cell_value).strip() == '':
-                        new_id = utils.generate_unique_id(self.page)
-                        self.csv_data.at[idx, 'originating_system_id'] = new_id
-                        # Also update dc:identifier if it exists and is empty
-                        if 'dc:identifier' in self.csv_data.columns:
-                            dc_id_value = self.csv_data.at[idx, 'dc:identifier']
-                            if pd.isna(dc_id_value) or str(dc_id_value).strip() == '':
-                                # In Alma mode, use Handle URL format
-                                if current_mode == "Alma":
+            # Step 3: Fill empty originating_system_id cells with unique IDs (Alma mode only)
+            if current_mode == "Alma":
+                filled_ids = 0
+                if 'originating_system_id' in self.csv_data.columns:
+                    for idx in range(len(self.csv_data)):
+                        cell_value = self.csv_data.at[idx, 'originating_system_id']
+                        # Check if empty (empty string, None, or NaN)
+                        if pd.isna(cell_value) or str(cell_value).strip() == '':
+                            new_id = utils.generate_unique_id(self.page)
+                            self.csv_data.at[idx, 'originating_system_id'] = new_id
+                            # Also update dc:identifier if it exists and is empty
+                            if 'dc:identifier' in self.csv_data.columns:
+                                dc_id_value = self.csv_data.at[idx, 'dc:identifier']
+                                if pd.isna(dc_id_value) or str(dc_id_value).strip() == '':
+                                    # In Alma mode, use Handle URL format
                                     numeric_part = new_id.split('_')[-1] if '_' in new_id else new_id
                                     self.csv_data.at[idx, 'dc:identifier'] = f"http://hdl.handle.net/11084/{numeric_part}"
-                                else:
-                                    self.csv_data.at[idx, 'dc:identifier'] = new_id
-                        filled_ids += 1
-                        self.logger.info(f"Generated ID {new_id} for row {idx}")
-                if filled_ids > 0:
-                    self.logger.info(f"Filled {filled_ids} empty originating_system_id cell(s)")
-            else:
-                self.logger.warning("originating_system_id column not found in CSV")
+                            filled_ids += 1
+                            self.logger.info(f"Generated ID {new_id} for row {idx}")
+                    if filled_ids > 0:
+                        self.logger.info(f"Filled {filled_ids} empty originating_system_id cell(s)")
+                else:
+                    self.logger.warning("originating_system_id column not found in CSV")
             
             # Step 3.5: In Alma mode, convert dc:identifier to Handle URL format
             if current_mode == "Alma" and 'dc:identifier' in self.csv_data.columns and 'originating_system_id' in self.csv_data.columns:
@@ -305,14 +369,15 @@ class UpdateCSVView(BaseView):
                 if filled_collections > 0:
                     self.logger.info(f"Filled {filled_collections} empty collection_id cell(s) with Pending Review collection")
             
-            # Step 4: Populate dginfo field for ALL rows with temp CSV filename
-            if 'dginfo' in self.csv_data.columns:
-                self.csv_data['dginfo'] = temp_csv_filename
-                # Also update original so dginfo doesn't show as changed
-                self.csv_data_original['dginfo'] = temp_csv_filename
-                self.logger.info(f"Set dginfo field to '{temp_csv_filename}' for all {len(self.csv_data)} rows")
-            else:
-                self.logger.warning("dginfo column not found in CSV")
+            # Step 4: Populate dginfo field for ALL rows with temp CSV filename (Alma mode only)
+            if current_mode == "Alma":
+                if 'dginfo' in self.csv_data.columns:
+                    self.csv_data['dginfo'] = temp_csv_filename
+                    # Also update original so dginfo doesn't show as changed
+                    self.csv_data_original['dginfo'] = temp_csv_filename
+                    self.logger.info(f"Set dginfo field to '{temp_csv_filename}' for all {len(self.csv_data)} rows")
+                else:
+                    self.logger.warning("dginfo column not found in CSV")
             
             # Save the updated CSV
             self.save_csv_data()
@@ -339,12 +404,19 @@ class UpdateCSVView(BaseView):
             message_parts = []
             if updates > 0:
                 message_parts.append(f"Updated {updates} filename(s)")
-            message_parts.append(f"Added CSV row (ID: {unique_id})")
-            if filled_ids > 0:
+            
+            # Only mention CSV row addition in Alma mode
+            if current_mode == "Alma":
+                message_parts.append("Added CSV row with unique ID")
+            
+            if current_mode == "Alma" and filled_ids > 0:
                 message_parts.append(f"Generated {filled_ids} ID(s)")
-            if filled_collections > 0:
+            if current_mode == "Alma" and filled_collections > 0:
                 message_parts.append(f"Set {filled_collections} collection(s) to Pending Review")
-            message_parts.append(f"Set dginfo for all rows")
+            
+            # Only mention dginfo in Alma mode
+            if current_mode == "Alma":
+                message_parts.append(f"Set dginfo for all rows")
             
             self.logger.info("Apply All Updates completed successfully")
             self.page.snack_bar = ft.SnackBar(
@@ -726,8 +798,9 @@ class UpdateCSVView(BaseView):
             self.selected_column = "file_name_1"
             button_text = "Apply Matched Files to file_name_1"
         else:  # CollectionBuilder
-            self.selected_column = "object_location"  # TODO: Update this for CollectionBuilder
-            button_text = "Apply Matched Files to object_location"
+            # In CollectionBuilder, use the column selected by the user in File Selector
+            self.selected_column = self.page.session.get("selected_csv_column") or "filename"
+            button_text = f"Apply Matched Files to CollectionBuilder URLs"
         
         # Build the UI - Status information controls
         status_info_controls = []

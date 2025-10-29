@@ -189,6 +189,10 @@ class StorageView(BaseView):
                 self.page.update()
                 return
             
+            # Check for SMALL and TN directories (optional)
+            small_dir = os.path.join(temp_dir, "SMALL")
+            tn_dir = os.path.join(temp_dir, "TN")
+            
             # Show progress bar
             self.upload_progress.visible = True
             self.upload_status.value = "🔄 Initializing Azure connection..."
@@ -234,14 +238,34 @@ class StorageView(BaseView):
                 self.page.update()
                 return
             
-            # Get list of files to upload
+            # Get list of files to upload from OBJS, SMALL, and TN directories
             files_to_upload = []
+            
+            # Add files from OBJS directory
             for root, dirs, files in os.walk(objs_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
                     # Create relative path for blob name
                     relative_path = os.path.relpath(file_path, objs_dir)
                     files_to_upload.append((file_path, relative_path))
+            
+            # Add files from SMALL directory if it exists
+            if os.path.exists(small_dir):
+                for root, dirs, files in os.walk(small_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Create relative path for blob name, marking as from SMALL
+                        relative_path = os.path.relpath(file_path, small_dir)
+                        files_to_upload.append((file_path, relative_path))
+            
+            # Add files from TN directory if it exists
+            if os.path.exists(tn_dir):
+                for root, dirs, files in os.walk(tn_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Create relative path for blob name, marking as from TN
+                        relative_path = os.path.relpath(file_path, tn_dir)
+                        files_to_upload.append((file_path, relative_path))
             
             if not files_to_upload:
                 self.upload_status.value = "⚠️ No files found in OBJS directory"
@@ -252,6 +276,8 @@ class StorageView(BaseView):
             
             # Upload files
             uploaded_count = 0
+            skipped_count = 0
+            failed_count = 0
             total_files = len(files_to_upload)
             
             # Get selected mode and collection for CollectionBuilder path construction
@@ -291,7 +317,7 @@ class StorageView(BaseView):
                     # Check if blob already exists
                     if blob_client.exists():
                         self.logger.info(f"Blob '{blob_path}' already exists in container '{container_name}'. Skipping.")
-                        uploaded_count += 1  # Count as uploaded (already there)
+                        skipped_count += 1
                     else:
                         # Upload the file
                         with open(local_path, "rb") as data:
@@ -301,15 +327,32 @@ class StorageView(BaseView):
                     
                 except Exception as e:
                     self.logger.error(f"Failed to upload {blob_name}: {e}")
+                    failed_count += 1
                     continue
             
             # Update final status
             self.upload_progress.value = 1.0
-            if uploaded_count == total_files:
-                self.upload_status.value = f"✅ Successfully uploaded {uploaded_count} files to Azure"
+            
+            # Build detailed status message
+            status_parts = []
+            if uploaded_count > 0:
+                status_parts.append(f"✅ Uploaded: {uploaded_count}")
+            if skipped_count > 0:
+                status_parts.append(f"⏭️ Skipped: {skipped_count}")
+            if failed_count > 0:
+                status_parts.append(f"❌ Failed: {failed_count}")
+            
+            total_processed = uploaded_count + skipped_count + failed_count
+            self.upload_status.value = f"{' | '.join(status_parts)} (Total: {total_processed}/{total_files})"
+            
+            # Set color based on results
+            if failed_count > 0:
+                self.upload_status.color = ft.Colors.RED
+            elif uploaded_count == total_files:
                 self.upload_status.color = ft.Colors.GREEN
+            elif skipped_count > 0 and failed_count == 0:
+                self.upload_status.color = ft.Colors.BLUE
             else:
-                self.upload_status.value = f"⚠️ Uploaded {uploaded_count} of {total_files} files (some may have been skipped)"
                 self.upload_status.color = ft.Colors.ORANGE
             
             self.page.update()
