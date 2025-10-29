@@ -19,8 +19,16 @@ class StorageView(BaseView):
         self.upload_status = ft.Text("", visible=False)
     
     def get_azure_base_url(self):
-        """Get the Azure base URL from persistent settings."""
+        """Get the Azure base URL from persistent settings or use mode-specific default."""
         try:
+            # Check the current mode
+            current_mode = self.page.session.get("selected_mode")
+            
+            # If in CollectionBuilder mode, use the CollectionBuilder Azure URL
+            if current_mode == "CollectionBuilder":
+                return "https://collectionbuilder.blob.core.windows.net"
+            
+            # Otherwise, get from persistent settings
             with open("_data/persistent.json", "r", encoding="utf-8") as f:
                 persistent_data = json.load(f)
             return persistent_data.get("azure_base_url", "")
@@ -190,15 +198,24 @@ class StorageView(BaseView):
             
             # Initialize Azure Blob Service Client using connection string
             try:
-                # Get connection string from environment variable
-                connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+                # Get the selected storage from session
+                selected_storage = self.page.session.get("selected_storage")
+                
+                # Determine which connection string to use based on selected storage
+                if selected_storage == "collectionbuilder":
+                    connection_string = os.getenv("AZURE_CB_STORAGE_CONNECTION_STRING")
+                    storage_name = "CollectionBuilder"
+                else:  # dgobjects or other
+                    connection_string = os.getenv("AZURE_DG_STORAGE_CONNECTION_STRING")
+                    storage_name = "DG Objects"
                 
                 if not connection_string:
-                    self.upload_status.value = "❌ Azure Storage connection string not configured"
-                    self.upload_status.value += "\n\n💡 Please set AZURE_STORAGE_CONNECTION_STRING in .env file"
+                    env_var_name = "AZURE_CB_STORAGE_CONNECTION_STRING" if selected_storage == "collectionbuilder" else "AZURE_DG_STORAGE_CONNECTION_STRING"
+                    self.upload_status.value = f"❌ Azure Storage connection string not configured for {storage_name}"
+                    self.upload_status.value += f"\n\n💡 Please set {env_var_name} in .env file"
                     self.upload_status.color = ft.Colors.RED
                     self.upload_progress.visible = False
-                    self.logger.error("AZURE_STORAGE_CONNECTION_STRING environment variable not set")
+                    self.logger.error(f"{env_var_name} environment variable not set")
                     self.page.update()
                     return
                 
@@ -209,7 +226,8 @@ class StorageView(BaseView):
                 error_msg = str(e)
                 self.upload_status.value = f"❌ Failed to connect to Azure Storage"
                 self.upload_status.value += f"\n\nError: {error_msg}"
-                self.upload_status.value += "\n\n💡 Please check your AZURE_STORAGE_CONNECTION_STRING in .env file"
+                env_var_name = "AZURE_CB_STORAGE_CONNECTION_STRING" if selected_storage == "collectionbuilder" else "AZURE_DG_STORAGE_CONNECTION_STRING"
+                self.upload_status.value += f"\n\n💡 Please check your {env_var_name} in .env file"
                 self.upload_status.color = ft.Colors.RED
                 self.upload_progress.visible = False
                 self.logger.error(f"Azure Storage connection failed: {error_msg}")
@@ -236,6 +254,10 @@ class StorageView(BaseView):
             uploaded_count = 0
             total_files = len(files_to_upload)
             
+            # Get selected mode and collection for CollectionBuilder path construction
+            selected_mode = self.page.session.get("selected_mode")
+            selected_collection = self.page.session.get("selected_collection")
+            
             for i, (local_path, blob_name) in enumerate(files_to_upload):
                 try:
                     self.upload_status.value = f"🔄 Uploading {blob_name} ({i+1}/{total_files})"
@@ -255,6 +277,10 @@ class StorageView(BaseView):
                         container_name = "objs"
                         # Remove 'objs/' prefix if present
                         blob_path = blob_name.replace("objs/", "")
+                    
+                    # For CollectionBuilder mode with collectionbuilder storage, prepend collection name to path
+                    if selected_mode == "CollectionBuilder" and selected_storage == "collectionbuilder" and selected_collection:
+                        blob_path = f"{selected_collection}/{blob_path}"
                     
                     # Create blob client
                     blob_client = blob_service_client.get_blob_client(
