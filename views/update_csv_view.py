@@ -369,6 +369,63 @@ class UpdateCSVView(BaseView):
                 if filled_collections > 0:
                     self.logger.info(f"Filled {filled_collections} empty collection_id cell(s) with Pending Review collection")
             
+            # Step 3.7: Handle parent/child relationships (CollectionBuilder mode only)
+            # Copy image_small and image_thumb from first child to parent
+            if current_mode == "CollectionBuilder":
+                parent_child_updates = 0
+                
+                # Check if required columns exist
+                if 'objectid' in self.csv_data.columns and 'parentid' in self.csv_data.columns:
+                    self.logger.info("Processing parent/child relationships...")
+                    
+                    # Find all parent records (rows where parentid is empty/NaN)
+                    parents_mask = self.csv_data['parentid'].isna() | (self.csv_data['parentid'] == '')
+                    parent_indices = self.csv_data[parents_mask].index
+                    
+                    for parent_idx in parent_indices:
+                        parent_objectid = self.csv_data.at[parent_idx, 'objectid']
+                        
+                        if pd.isna(parent_objectid) or str(parent_objectid).strip() == '':
+                            continue
+                            
+                        # Find children (rows where parentid matches this parent's objectid)
+                        children_mask = self.csv_data['parentid'] == parent_objectid
+                        children_indices = self.csv_data[children_mask].index
+                        
+                        if len(children_indices) > 0:
+                            # Get the first child
+                            first_child_idx = children_indices[0]
+                            
+                            # Copy image_small and image_thumb from first child to parent
+                            updates_made = False
+                            
+                            if 'image_small' in self.csv_data.columns:
+                                child_small = self.csv_data.at[first_child_idx, 'image_small']
+                                if not pd.isna(child_small) and str(child_small).strip() != '':
+                                    self.csv_data.at[parent_idx, 'image_small'] = child_small
+                                    updates_made = True
+                                    self.logger.info(f"Copied image_small from child to parent (objectid={parent_objectid})")
+                            
+                            if 'image_thumb' in self.csv_data.columns:
+                                child_thumb = self.csv_data.at[first_child_idx, 'image_thumb']
+                                if not pd.isna(child_thumb) and str(child_thumb).strip() != '':
+                                    self.csv_data.at[parent_idx, 'image_thumb'] = child_thumb
+                                    updates_made = True
+                                    self.logger.info(f"Copied image_thumb from child to parent (objectid={parent_objectid})")
+                            
+                            if updates_made:
+                                parent_child_updates += 1
+                    
+                    if parent_child_updates > 0:
+                        self.logger.info(f"Updated {parent_child_updates} parent record(s) with child derivative URLs")
+                    else:
+                        self.logger.info("No parent/child updates needed")
+                else:
+                    if 'objectid' not in self.csv_data.columns:
+                        self.logger.warning("objectid column not found in CSV - skipping parent/child processing")
+                    if 'parentid' not in self.csv_data.columns:
+                        self.logger.warning("parentid column not found in CSV - skipping parent/child processing")
+            
             # Step 4: Populate dginfo field for ALL rows with temp CSV filename (Alma mode only)
             if current_mode == "Alma":
                 if 'dginfo' in self.csv_data.columns:
