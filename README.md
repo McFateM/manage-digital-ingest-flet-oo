@@ -1,6 +1,33 @@
 # Manage Digital Ingest: a Flet Multi-Page
 
-## 📖 Documentation
+## � Quick Start
+
+### Running the Application
+
+The easiest way to run the application is using the provided `run.sh` script:
+
+```bash
+./run.sh
+```
+
+**What it does:**
+1. Checks if a Python virtual environment (`.venv`) exists
+2. Creates the virtual environment if it doesn't exist
+3. Activates the virtual environment
+4. Installs/upgrades required dependencies from `python-requirements.txt`
+5. Launches the Flet application
+
+**First-time setup:**
+```bash
+chmod +x run.sh  # Make the script executable (only needed once)
+./run.sh         # Run the application
+```
+
+**Requirements:**
+- Python 3.7 or higher
+- Bash shell (macOS, Linux, or Windows with Git Bash/WSL)
+
+## �📖 Documentation
 
 **[→ User Guide (USER.md)](USER.md)** - Complete instructions for using the application  
 **[→ Development History (HISTORY.md)](HISTORY.md)** - Chronological record of feature development and enhancements
