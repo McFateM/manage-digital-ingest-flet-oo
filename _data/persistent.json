@@ -1,10 +1,10 @@
 {
-  "last_directory": "/Users/mcfatem/GitHub/GCCB-TDPS-Archive/_data",
+  "last_directory": "/Users/mcfatem/Downloads",
   "window-height": 800,
   "selected_theme": "Light",
-  "selected_mode": "CollectionBuilder",
+  "selected_mode": "Alma",
   "selected_file_option": "CSV",
-  "selected_storage": "collectionbuilder",
+  "selected_storage": "NONE",
   "selected_collection": "TDPS_archive",
   "azure_base_url": "https://dgobjects.blob.core.windows.net/"
 }
