@@ -384,45 +384,12 @@ class StorageView(BaseView):
             selected_mode = "Alma"
         
         if selected_mode == "Alma":
-            # For Alma mode, show markdown content and upload script button
+            # For Alma mode, show markdown content only
             alma_content = utils.read_markdown("_data/alma_storage.md")
             
             return ft.Column(
                 controls=[
                     *self.create_page_header("Storage", include_log_button=True),
-                    # Add button for generating upload script
-                    ft.Container(
-                        content=ft.Column([
-                            ft.Text(
-                                "Alma AWS S3 Upload",
-                                size=18,
-                                weight=ft.FontWeight.BOLD,
-                                color=colors['primary_text']
-                            ),
-                            ft.Text(
-                                "Generate a bash script to upload files to Alma's AWS S3 storage",
-                                size=13,
-                                color=colors['secondary_text']
-                            ),
-                            ft.Container(
-                                content=ft.ElevatedButton(
-                                    text="Generate Upload Script",
-                                    icon=ft.Icons.TERMINAL,
-                                    on_click=self.generate_upload_script,
-                                    style=ft.ButtonStyle(
-                                        color=ft.Colors.WHITE,
-                                        bgcolor=ft.Colors.GREEN_700
-                                    )
-                                ),
-                                margin=ft.margin.only(top=10, bottom=5)
-                            ),
-                        ], spacing=5),
-                        bgcolor=colors['container_bg'],
-                        border=ft.border.all(1, colors['border']),
-                        border_radius=8,
-                        padding=20,
-                        margin=ft.margin.only(top=10, bottom=10)
-                    ),
                     # Markdown instructions
                     ft.Container(
                         content=ft.Markdown(

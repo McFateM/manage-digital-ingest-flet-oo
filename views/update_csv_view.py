@@ -358,7 +358,7 @@ class UpdateCSVView(BaseView):
                 if handle_count > 0:
                     self.logger.info(f"Set {handle_count} dc:identifier cell(s) to Handle URL format")
             
-            # Step 3.6: Fill empty collection_id cells with Pending Review collection (Alma mode only)
+            # Step 3.6: Fill collection_id cells with Pending Review collection (Alma mode only)
             filled_collections = 0
             if current_mode == "Alma" and 'collection_id' in self.csv_data.columns:
                 pending_review_id = '81313013130004641'  # Pending Review collection
@@ -371,6 +371,99 @@ class UpdateCSVView(BaseView):
                         filled_collections += 1
                 if filled_collections > 0:
                     self.logger.info(f"Filled {filled_collections} empty collection_id cell(s) with Pending Review collection")
+            
+            # Step 3.65: Process Alma compound parent/child relationships
+            if current_mode == "Alma" and 'compoundrelationship' in self.csv_data.columns:
+                compound_updates = 0
+                self.logger.info("Processing Alma compound parent/child relationships...")
+                
+                idx = 0
+                while idx < len(self.csv_data):
+                    compound = str(self.csv_data.at[idx, 'compoundrelationship']).strip()
+                    
+                    # Check if this is a parent
+                    if compound.startswith('parent'):
+                        parent_idx = idx
+                        parent_pid = self.csv_data.at[parent_idx, 'originating_system_id']
+                        self.logger.info(f"Found parent at row {idx} with originating_system_id: {parent_pid}")
+                        
+                        # Set parent's group_id to its own originating_system_id
+                        if 'group_id' in self.csv_data.columns:
+                            self.csv_data.at[parent_idx, 'group_id'] = parent_pid
+                            self.logger.info(f"  Set parent group_id to: {parent_pid}")
+                        
+                        # Initialize parent's TOC and dginfo
+                        toc = ""
+                        dginfo_list = []
+                        
+                        # Count and process children
+                        child_count = 0
+                        child_idx = idx + 1
+                        
+                        # Loop through following rows to find children
+                        while child_idx < len(self.csv_data):
+                            child_compound = str(self.csv_data.at[child_idx, 'compoundrelationship']).strip()
+                            
+                            if not child_compound.startswith('child'):
+                                break  # End of children
+                            
+                            child_count += 1
+                            
+                            # Get child information
+                            child_title = str(self.csv_data.at[child_idx, 'dc:title']) if 'dc:title' in self.csv_data.columns else ''
+                            child_type = str(self.csv_data.at[child_idx, 'dc:type']) if 'dc:type' in self.csv_data.columns else ''
+                            
+                            # Build TOC entry
+                            if child_title and child_type:
+                                toc += f"{child_title} ({child_type}) | "
+                            elif child_title:
+                                toc += f"{child_title} | "
+                            
+                            # Set child's group_id to parent's originating_system_id
+                            if 'group_id' in self.csv_data.columns:
+                                self.csv_data.at[child_idx, 'group_id'] = parent_pid
+                            
+                            # Set child rep_label and rep_public_note
+                            if 'rep_label' in self.csv_data.columns:
+                                self.csv_data.at[child_idx, 'rep_label'] = child_title
+                            if 'rep_public_note' in self.csv_data.columns:
+                                self.csv_data.at[child_idx, 'rep_public_note'] = child_type
+                            
+                            self.logger.info(f"  Processed child at row {child_idx}: {child_title}")
+                            child_idx += 1
+                        
+                        # Validate we have at least 2 children
+                        if child_count < 2:
+                            error_msg = f"*ERROR* Parent at row {parent_idx} has only {child_count} child(ren), need at least 2!"
+                            self.logger.error(error_msg)
+                            if 'mms_id' in self.csv_data.columns:
+                                self.csv_data.at[parent_idx, 'mms_id'] = "*ERROR* Too few children!"
+                        else:
+                            # Update parent record
+                            if 'dcterms:tableOfContents' in self.csv_data.columns:
+                                self.csv_data.at[parent_idx, 'dcterms:tableOfContents'] = toc.rstrip(' | ')
+                                self.logger.info(f"  Set parent TOC: {toc.rstrip(' | ')}")
+                            
+                            # Set parent dc:type to 'compound'
+                            if 'dc:type' in self.csv_data.columns:
+                                self.csv_data.at[parent_idx, 'dc:type'] = 'compound'
+                                self.logger.info(f"  Set parent dc:type to 'compound'")
+                            
+                            # Clear parent dcterms:type.dcterms:DCMIType
+                            if 'dcterms:type.dcterms:DCMIType' in self.csv_data.columns:
+                                self.csv_data.at[parent_idx, 'dcterms:type.dcterms:DCMIType'] = ''
+                            
+                            compound_updates += 1
+                        
+                        # Skip past the children we just processed
+                        idx = child_idx - 1
+                    
+                    idx += 1
+                
+                if compound_updates > 0:
+                    self.logger.info(f"Processed {compound_updates} compound parent/child group(s)")
+                else:
+                    self.logger.info("No compound parent/child relationships found")
             
             # Step 3.7: Handle parent/child relationships (CollectionBuilder mode only)
             # Copy image_small and image_thumb from first child to parent
