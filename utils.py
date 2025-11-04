@@ -366,7 +366,7 @@ def validate_csv_headings(csv_file_path, mode):
     
     try:
         # Read the verified headings (first row only)
-        verified_df = pd.read_csv(verified_file, nrows=0)
+        verified_df = pd.read_csv(verified_file, nrows=0, dtype=str, keep_default_na=False)
         verified_headings = set(verified_df.columns.tolist())
         
         # Read the CSV file headings (first row only) with multiple encodings
@@ -375,7 +375,8 @@ def validate_csv_headings(csv_file_path, mode):
         
         for encoding in encodings:
             try:
-                csv_df = pd.read_csv(csv_file_path, nrows=0, encoding=encoding)
+                # Read all columns as strings to prevent scientific notation
+                csv_df = pd.read_csv(csv_file_path, nrows=0, encoding=encoding, dtype=str, keep_default_na=False)
                 break
             except (UnicodeDecodeError, UnicodeError):
                 continue

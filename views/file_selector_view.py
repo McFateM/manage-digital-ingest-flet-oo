@@ -725,7 +725,8 @@ class CSVSelectorView(FileSelectorView):
                 
                 for encoding in encodings:
                     try:
-                        df = pd.read_csv(file_path, encoding=encoding)
+                        # Read all columns as strings to prevent scientific notation and type conversion
+                        df = pd.read_csv(file_path, encoding=encoding, dtype=str, keep_default_na=False)
                         self.logger.info(f"Successfully read CSV with encoding: {encoding}")
                         break
                     except (UnicodeDecodeError, UnicodeError):
@@ -773,7 +774,8 @@ class CSVSelectorView(FileSelectorView):
                 
                 for encoding in encodings:
                     try:
-                        df = pd.read_csv(file_path, encoding=encoding)
+                        # Read all columns as strings to prevent scientific notation and type conversion
+                        df = pd.read_csv(file_path, encoding=encoding, dtype=str, keep_default_na=False)
                         self.logger.info(f"Successfully read CSV with encoding: {encoding}")
                         break
                     except (UnicodeDecodeError, UnicodeError):

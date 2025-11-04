@@ -88,7 +88,8 @@ class UpdateCSVView(BaseView):
             
             for encoding in encodings:
                 try:
-                    self.csv_data = pd.read_csv(csv_path, encoding=encoding)
+                    # Read all columns as strings to prevent scientific notation and type conversion
+                    self.csv_data = pd.read_csv(csv_path, encoding=encoding, dtype=str, keep_default_na=False)
                     # Store a copy of the original data for comparison
                     self.csv_data_original = self.csv_data.copy()
                     self.csv_path = csv_path
@@ -113,7 +114,8 @@ class UpdateCSVView(BaseView):
         """
         try:
             if self.csv_data is not None and self.temp_csv_path:
-                self.csv_data.to_csv(self.temp_csv_path, index=False, encoding='utf-8')
+                # Save without index and preserve all values as text (no scientific notation)
+                self.csv_data.to_csv(self.temp_csv_path, index=False, encoding='utf-8', quoting=1)
                 self.logger.info(f"Saved CSV data to: {self.temp_csv_path}")
                 return True
             return False
