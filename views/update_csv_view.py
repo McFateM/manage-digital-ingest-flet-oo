@@ -365,7 +365,8 @@ class UpdateCSVView(BaseView):
                 for idx in range(len(self.csv_data)):
                     cell_value = self.csv_data.at[idx, 'collection_id']
                     # Check if empty (empty string, None, or NaN)
-                    if pd.isna(cell_value) or str(cell_value).strip() == '':
+                    # if pd.isna(cell_value) or str(cell_value).strip() == '':   # This logic was not right, the collection_id should ALWAYS be 'pending review'!
+                    if True:
                         self.csv_data.at[idx, 'collection_id'] = pending_review_id
                         filled_collections += 1
                 if filled_collections > 0:
