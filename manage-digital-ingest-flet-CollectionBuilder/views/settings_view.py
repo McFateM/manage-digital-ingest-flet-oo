@@ -1,5 +1,5 @@
 """
-Settings View for Manage Digital Ingest Application
+Settings View for Manage Digital Ingest Application - CollectionBuilder Edition
 
 This module contains the SettingsView class for displaying and managing
 application settings and configurations.
@@ -14,7 +14,11 @@ import os
 class SettingsView(BaseView):
     """
     Settings view class for configuration management.
+    CollectionBuilder Edition - Mode is fixed to 'CollectionBuilder'.
     """
+    
+    # Application mode constant - fixed for CollectionBuilder Edition
+    APP_MODE = "CollectionBuilder"
     
     def load_persistent_settings(self):
         """Load settings from persistent.json"""
@@ -134,8 +138,8 @@ class SettingsView(BaseView):
         # Load persistent settings
         persistent_settings = self.load_persistent_settings()
         
-        # Auto-set mode to CollectionBuilder for this app
-        current_mode = "CollectionBuilder"
+        # Auto-set mode to CollectionBuilder for this app (using class constant)
+        current_mode = self.APP_MODE
         self.page.session.set("selected_mode", current_mode)
         self.save_persistent_settings({"selected_mode": current_mode})
         
@@ -261,8 +265,8 @@ class SettingsView(BaseView):
         # For CollectionBuilder app: Display mode as read-only text instead of dropdown
         mode_settings_container = ft.Container(
             content=ft.Column([
-                ft.Text("Processing Mode: CollectionBuilder", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
-                ft.Text("This app is configured for CollectionBuilder workflows only", size=12, italic=True, color=colors['secondary_text'])
+                ft.Text(f"Processing Mode: {self.APP_MODE}", size=16, weight=ft.FontWeight.BOLD, color=colors['primary_text']),
+                ft.Text(f"This app is configured for {self.APP_MODE} workflows only", size=12, italic=True, color=colors['secondary_text'])
             ]),
             padding=ft.padding.all(8),
             border=ft.border.all(1, colors['border']),
