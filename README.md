@@ -1,36 +1,92 @@
-# Manage Digital Ingest: a Flet Multi-Page
+# Manage Digital Ingest: Split into Two Applications
 
-## � Quick Start
+> **⚠️ IMPORTANT: This repository now contains TWO separate applications.**
 
-### Running the Application
+This repository has been split to provide focused applications for different workflows:
 
-The easiest way to run the application is using the provided `run.sh` script:
+1. **[Alma Edition](manage-digital-ingest-flet-Alma/)** - For Alma Digital workflows
+2. **[CollectionBuilder Edition](manage-digital-ingest-flet-CollectionBuilder/)** - For CollectionBuilder workflows
+
+## 🎯 Which Application Should I Use?
+
+### Use the [Alma Edition](manage-digital-ingest-flet-Alma/) if you are:
+- Ingesting digital objects into Alma Digital
+- Working with compound objects (parent/child relationships)
+- Need to generate AWS S3 upload scripts
+- Creating thumbnails with `.clientThumb` extension
+
+### Use the [CollectionBuilder Edition](manage-digital-ingest-flet-CollectionBuilder/) if you are:
+- Building CollectionBuilder static websites
+- Need to select target CollectionBuilder collections
+- Uploading to Azure Blob storage
+- Creating thumbnails and small images for web display
+
+## 🚀 Quick Start
+
+### For Alma Edition:
 
 ```bash
+cd manage-digital-ingest-flet-Alma
 ./run.sh
 ```
 
-**What it does:**
-1. Checks if a Python virtual environment (`.venv`) exists
-2. Creates the virtual environment if it doesn't exist
-3. Activates the virtual environment
-4. Installs/upgrades required dependencies from `python-requirements.txt`
-5. Launches the Flet application
+See the [Alma README](manage-digital-ingest-flet-Alma/README.md) for details.
 
-**First-time setup:**
+### For CollectionBuilder Edition:
+
 ```bash
-chmod +x run.sh  # Make the script executable (only needed once)
-./run.sh         # Run the application
+cd manage-digital-ingest-flet-CollectionBuilder
+./run.sh
 ```
 
-**Requirements:**
+See the [CollectionBuilder README](manage-digital-ingest-flet-CollectionBuilder/README.md) for details.
+
+## 📚 Documentation
+
+- **[README-SPLIT-APPS.md](README-SPLIT-APPS.md)** - Detailed explanation of both apps
+- **[DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md)** - Instructions for deploying to separate repos
+- **[SPLIT-SUMMARY.md](SPLIT-SUMMARY.md)** - Summary of changes made in the split
+- **[USER.md](USER.md)** - Original user guide (covers both workflows)
+- **[HISTORY.md](HISTORY.md)** - Development history
+
+## 🔧 Requirements
+
+Both applications require:
 - Python 3.7 or higher
 - Bash shell (macOS, Linux, or Windows with Git Bash/WSL)
+- Dependencies from `python-requirements.txt` (automatically installed by `run.sh`)
 
-## �📖 Documentation
+---
 
-**[→ User Guide (USER.md)](USER.md)** - Complete instructions for using the application  
-**[→ Development History (HISTORY.md)](HISTORY.md)** - Chronological record of feature development and enhancements
+## 📝 About This Split
+
+This repository previously contained a single unified application that supported both Alma and CollectionBuilder modes via a mode selector. The application has been split into two focused editions to:
+
+- **Simplify user experience** - No mode selection confusion
+- **Cleaner codebase** - Less conditional logic
+- **Focused documentation** - Each app documents only its workflow
+- **Independent deployment** - Each can be packaged and distributed separately
+
+The original unified code remains in the repository root for reference. The split applications are fully functional and ready for independent use or deployment.
+
+## 🔗 Future Deployment
+
+These applications are intended for deployment to:
+- `Digital-Grinnell/manage-digital-ingest-flet-Alma`
+- `Digital-Grinnell/manage-digital-ingest-flet-CollectionBuilder`
+
+See [DEPLOYMENT-GUIDE.md](DEPLOYMENT-GUIDE.md) for deployment instructions.
+
+---
+
+## 🏢 About
+
+Developed for Grinnell College Libraries to streamline digital object preparation and ingest for both Alma Digital and CollectionBuilder static sites.
+
+---
+
+<details>
+<summary>📜 Original Development Notes (Click to expand)</summary>
 
 ## Setup Command Sequence
 
@@ -190,3 +246,4 @@ Using `Flet` version 0.28.2 (rather than the current v0.28.3) may enable the Fil
 
 AI typically generates references to `.icons` and `.colors`, but both were recently converted to begin with uppercase letters, so `.Icons` and `.Colors` are needed.  
 
+</details>
